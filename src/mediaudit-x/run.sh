@@ -29,17 +29,29 @@ else
 fi
 
 # ── Backend deps ─────────────────────────────────────────────────────
-if [[ ! -x "$BACKEND/venv/bin/python" ]]; then
-  log "Creating Python venv and installing requirements (first run only)..."
-  python3 -m venv "$BACKEND/venv"
-  "$BACKEND/venv/bin/pip" install -q -r "$BACKEND/requirements.txt"
+# The marker is written only after a successful install, so an install
+# interrupted with Ctrl+C is retried next run instead of skipped; it is
+# also redone when requirements.txt changes.
+MARKER="$BACKEND/venv/.requirements-installed"
+if [[ ! -f "$MARKER" || "$BACKEND/requirements.txt" -nt "$MARKER" ]]; then
+  PY_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info[0]}.{sys.version_info[1]}")')
+  case "$PY_VERSION" in
+    3.10|3.11|3.12|3.13) ;;
+    *) fail "python3 is $PY_VERSION ($(command -v python3)); need 3.10-3.13. Try: conda create -n mediaudit python=3.12 && conda activate mediaudit" ;;
+  esac
+  log "Installing backend requirements with Python $PY_VERSION (first run takes a few minutes)..."
+  [[ -x "$BACKEND/venv/bin/python" ]] || python3 -m venv "$BACKEND/venv"
+  # Old pips miss prebuilt wheels and compile from source, which looks like a hang.
+  "$BACKEND/venv/bin/python" -m pip install --upgrade pip
+  "$BACKEND/venv/bin/python" -m pip install --prefer-binary -r "$BACKEND/requirements.txt"
+  touch "$MARKER"
 fi
 PY="$BACKEND/venv/bin/python"
 
 # ── Frontend deps ────────────────────────────────────────────────────
 if [[ ! -d "$FRONTEND/node_modules" ]]; then
   log "Installing frontend packages (first run only)..."
-  (cd "$FRONTEND" && npm ci --silent)
+  (cd "$FRONTEND" && npm ci)
 fi
 
 # ── Indices + sample data ────────────────────────────────────────────
