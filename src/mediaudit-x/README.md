@@ -45,6 +45,26 @@ source, rather than left to LLM inference alone.
   LLM to state, to preserve the zero-hallucination property. Falls back
   to a deterministic no-LLM tool sweep if the LLM call fails for any
   reason, so adjudication still completes end-to-end.
+- **Claim chat** (`routers/chat.py`, `agent/chat.py` + `agent/chat_agent_builder.py`) —
+  lets a reviewer ask free-text questions about one claim ("was step
+  therapy met?", "why was this denied?") from the same real data, not a
+  canned/demo response. Two interchangeable backends, selected by
+  `CHAT_PROVIDER`: **Elastic Agent Builder** (default, if
+  `KIBANA_URL`/Agent Builder is configured) — Kibana's own agent/tool
+  orchestration, calling 3 custom ES|QL tools
+  (`app/setup_agent_builder.py`) provisioned against `fhir-clinical-ehr`,
+  `medical-policies`, and `fda-drug-interactions`, with server-side
+  conversation state (`conversation_id`) — or the hand-rolled
+  Bedrock/Anthropic tool loop reusing `agent/orchestrator.py`'s own
+  tools. A converse call erroring on the Agent Builder side falls back
+  to the Bedrock path automatically, same "always have a working
+  fallback" rule the rest of this codebase follows. Deliberately kept to
+  read-only Q&A, never the adjudication decision itself — a real
+  difference in analysis style was found during development (Agent
+  Builder's LLM reasoning over raw encounter data surfaced an NSAID
+  prescription a keyword-based tool missed), useful for an explain-it-to-
+  a-reviewer chat but not something to let override a deterministic
+  decision.
 - **Letter + FHIR generation** (`actuators/letter_generator.py`) —
   template-based, not LLM-freeform, built entirely from cited tool
   results.
@@ -243,6 +263,13 @@ python -m app.ingestion.ingest_synthea_samples   # CLM-2001 through CLM-2005
 
 All three backfill `notes_vector` / `policy_vector` with the real
 embedding function before indexing.
+
+If `KIBANA_URL` is set and Agent Builder is enabled on your Elastic
+project, also provision the claim-chat tools/agent (safe to re-run):
+
+```bash
+python -m app.setup_agent_builder
+```
 
 ### 4. Run the backend
 
