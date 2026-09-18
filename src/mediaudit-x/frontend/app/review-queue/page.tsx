@@ -7,13 +7,16 @@ import StatusBadge from "../components/StatusBadge";
 import Badge from "../components/ui/Badge";
 import EmptyState from "../components/ui/EmptyState";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
+import { DemoDataManager } from "../lib/completeDemoData";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+const USE_DEMO_DATA = true; // Set to false when backend is available
 
 type Claim = {
-  id: string;
+  id?: string;
   claim_id: string;
   patient_id: string;
+  patient_name?: string;
   payer_name: string;
   cpt_code: string;
   icd10_code: string;
@@ -21,6 +24,8 @@ type Claim = {
   status: string;
   submitted_date?: string;
   ai_recommendation?: "APPROVE" | "DENY" | "NEEDS_REVIEW" | "REQUEST_INFO";
+  hospital?: string;
+  procedure_name?: string;
 };
 
 const STATUS_FILTERS = ["All", "PENDING", "REQUEST_INFO"] as const;
@@ -34,17 +39,39 @@ export default function ReviewQueuePage() {
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
-    fetch(`${API_BASE_URL}/claims?limit=200`)
-      .then((res) => res.json())
-      .then((data) => {
-        // Filter to show only claims that need review (not already approved/denied)
-        const reviewable = data.filter((c: Claim) =>
-          c.status === "PENDING" || c.status === "REQUEST_INFO"
-        );
-        setClaims(reviewable);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+    if (USE_DEMO_DATA) {
+      // Use demo data from localStorage
+      const demoClaims = DemoDataManager.getAllClaims();
+
+      // Filter to show only claims that need review (not already approved/denied)
+      const reviewable = demoClaims.filter((c) =>
+        c.status === "PENDING" || c.status === "REQUEST_INFO"
+      );
+
+      setClaims(reviewable as any[]);
+      setLoading(false);
+    } else {
+      // Use real API
+      fetch(`${API_BASE_URL}/claims?limit=200`)
+        .then((res) => res.json())
+        .then((data) => {
+          // Filter to show only claims that need review (not already approved/denied)
+          const reviewable = data.filter((c: Claim) =>
+            c.status === "PENDING" || c.status === "REQUEST_INFO"
+          );
+          setClaims(reviewable);
+          setLoading(false);
+        })
+        .catch(() => {
+          // Fallback to demo data on error
+          const demoClaims = DemoDataManager.getAllClaims();
+          const reviewable = demoClaims.filter((c) =>
+            c.status === "PENDING" || c.status === "REQUEST_INFO"
+          );
+          setClaims(reviewable as any[]);
+          setLoading(false);
+        });
+    }
   }, []);
 
   const filtered = claims.filter((claim) => {
@@ -192,12 +219,12 @@ export default function ReviewQueuePage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((claim) => (
-                <tr key={claim.id} className="border-t border-slate-100 hover:bg-slate-50/60">
+              {filtered.map((claim, idx) => (
+                <tr key={claim.id || claim.claim_id || idx} className="border-t border-slate-100 hover:bg-slate-50/60">
                   <td className="px-4 py-3 font-medium text-slate-800">{claim.claim_id}</td>
-                  <td className="px-4 py-3 text-slate-500">{claim.patient_id}</td>
+                  <td className="px-4 py-3 text-slate-500">{claim.patient_name || claim.patient_id}</td>
                   <td className="px-4 py-3 text-slate-500">{claim.payer_name}</td>
-                  <td className="px-4 py-3 text-slate-500">{claim.cpt_code}</td>
+                  <td className="px-4 py-3 text-slate-500">{claim.procedure_name || claim.cpt_code}</td>
                   <td className="px-4 py-3 text-slate-700">${claim.claim_amount?.toLocaleString()}</td>
                   <td className="px-4 py-3">
                     <AIRecommendationBadge recommendation={claim.ai_recommendation} />
