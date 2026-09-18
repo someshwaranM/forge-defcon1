@@ -28,6 +28,17 @@ FILE_TO_INDEX = {
     "synthea_drug_interactions.json": "fda-drug-interactions",
 }
 
+# FIXED (18 Sept): same idempotency fix as load_sample_data.py -- see
+# that file's comment. Without a stable id, re-running this script after
+# an earlier partial failure (e.g. the dot_product zero-vector bug this
+# script hit mid-run on 18 Sept) duplicates whatever it already
+# successfully indexed before the crash.
+INDEX_TO_ID_FIELD = {
+    "fhir-clinical-ehr": "encounter_id",
+    "insurance-claims": "claim_id",
+    "fda-drug-interactions": "interaction_id",
+}
+
 
 def _strip_provenance_fields(doc: dict) -> dict:
     return {k: v for k, v in doc.items() if not k.startswith("_")}
@@ -52,10 +63,12 @@ def load_all():
             print(f"[skip] {filename} not found")
             continue
         docs = json.loads(path.read_text())
+        id_field = INDEX_TO_ID_FIELD.get(index)
         for doc in docs:
             doc = _strip_provenance_fields(doc)
             doc = _backfill_vector(index, doc)
-            es.index(index=index, document=doc)
+            doc_id = doc.get(id_field) if id_field else None
+            es.index(index=index, document=doc, id=doc_id)
         print(f"[loaded] {len(docs)} docs -> {index}")
     es.indices.refresh(index=",".join(FILE_TO_INDEX.values()))
     print("[refreshed] all indices — data is immediately searchable")

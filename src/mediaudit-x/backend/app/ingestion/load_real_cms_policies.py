@@ -71,7 +71,9 @@ def load_all(dry_run: bool = False):
         print(f"source: {note[:200]}...")
 
         if not dry_run:
-            es.index(index="medical-policies", document=doc)
+            # FIXED (18 Sept): stable id=policy_id, same idempotency fix
+            # as load_sample_data.py / ingest_synthea_samples.py.
+            es.index(index="medical-policies", document=doc, id=doc["policy_id"])
 
     if not dry_run:
         es.indices.refresh(index="medical-policies")
