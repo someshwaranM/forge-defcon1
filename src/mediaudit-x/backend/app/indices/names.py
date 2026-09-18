@@ -12,5 +12,6 @@ CLAIM_DOCUMENTS = "claim-documents"
 DOCUMENT_PAGES = "document-pages"
 DOCUMENT_CHUNKS = "document-chunks"
 EVIDENCE_CHECKS = "evidence-checks"
+APP_LOGS = "app-logs"
 
 ALL_CLAIMS = f"{CLAIM_FILES},{INSURANCE_CLAIMS}"
