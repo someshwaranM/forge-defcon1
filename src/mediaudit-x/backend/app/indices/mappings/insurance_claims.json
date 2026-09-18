@@ -12,6 +12,28 @@
       "status":          { "type": "keyword" },
       "source":          { "type": "keyword" },
       "submitted_by":    { "type": "keyword" },
+      "latest_review": {
+        "properties": {
+          "decision":              { "type": "keyword" },
+          "status":                { "type": "keyword" },
+          "comment":               { "type": "text" },
+          "reviewer_name":         { "type": "keyword" },
+          "decided_at":            { "type": "date" },
+          "adjudication_id":       { "type": "keyword" },
+          "ai_recommended_status": { "type": "keyword" }
+        }
+      },
+      "review_history": {
+        "properties": {
+          "decision":              { "type": "keyword" },
+          "status":                { "type": "keyword" },
+          "comment":               { "type": "text" },
+          "reviewer_name":         { "type": "keyword" },
+          "decided_at":            { "type": "date" },
+          "adjudication_id":       { "type": "keyword" },
+          "ai_recommended_status": { "type": "keyword" }
+        }
+      },
       "attached_documents": {
         "type": "nested",
         "properties": {

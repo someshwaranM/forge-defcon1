@@ -9,6 +9,7 @@ app.pipeline.ingestion (all validation and storage logic lives there).
 Error bodies keep `detail` a plain string (the frontend shows it as-is)
 and add a machine-readable `code` plus per-file `rejected` reasons.
 """
+import json
 from dataclasses import asdict
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
@@ -48,14 +49,18 @@ def _error(e: IngestionError) -> JSONResponse:
 
 @router.post("/intake", status_code=201)
 async def intake_claim(
-    patient_id: str = Form(...),
-    payer_name: str = Form(...),
+    patient_id: str | None = Form(None),
+    payer_name: str | None = Form(None),
     claim_type: str = Form("professional"),
     submitted_by: str = Form("unknown"),
     claim_amount: float | None = Form(None),
+    # Optional JSON object with the hospital form's details (patient,
+    # clinical, admission, services, hospital, insurance,
+    # estimated_total_cost); see ClaimDetails in pipeline/ingestion/models.py.
+    details: str | None = Form(None),
     claim_id: str | None = Form(None),
     doc_type: str = Form("supporting_document"),
-    files: list[UploadFile] = File(...),
+    files: list[UploadFile] | None = File(None),
     service: IngestionService = Depends(get_ingestion_service),
 ):
     try:
@@ -65,8 +70,13 @@ async def intake_claim(
             claim_type=claim_type,
             submitted_by=submitted_by,
             claim_amount=claim_amount,
+            details=json.loads(details) if details else None,
             claim_id=claim_id,
         )
+    except json.JSONDecodeError:
+        return JSONResponse(status_code=422, content={
+            "detail": "details must be a JSON object", "code": "invalid_claim_fields", "rejected": [],
+        })
     except ValidationError as e:
         first = e.errors()[0]
         field = ".".join(str(p) for p in first["loc"])
@@ -75,7 +85,7 @@ async def intake_claim(
         })
 
     try:
-        result = service.intake(meta, await _read_uploads(files, service), doc_type)
+        result = service.intake(meta, await _read_uploads(files or [], service), doc_type)
     except IngestionError as e:
         return _error(e)
 

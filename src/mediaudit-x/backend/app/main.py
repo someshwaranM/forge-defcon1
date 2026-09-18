@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from app.logging_config import configure_logging
 configure_logging()
 
+from app.config import settings
 from app.indices.create_indices import ensure_indices
 from app.pipeline.ingestion.storage import upload_root
 from app.routers import claims, adjudication, intake, ocr, patients, audit
@@ -23,7 +24,7 @@ app = FastAPI(title="MediAudit-X API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip()],
     allow_methods=["*"],
     allow_headers=["*"],
 )

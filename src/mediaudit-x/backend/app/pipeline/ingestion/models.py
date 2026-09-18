@@ -7,6 +7,7 @@ only sees these types, so the stage can be driven from a script, a test,
 or a queue consumer later without touching HTTP.
 """
 from dataclasses import dataclass, field
+from datetime import date
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -107,18 +108,92 @@ class IngestionError(Exception):
         self.rejected = rejected or []
 
 
+class _Details(BaseModel):
+    """Optional free-form details; blank strings from forms become None."""
+    model_config = {"extra": "ignore"}
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def _blank_to_none(cls, value):
+        if isinstance(value, str):
+            value = value.strip()
+            return value or None
+        return value
+
+
+class PatientDetails(_Details):
+    name: str | None = None
+    age: int | None = Field(default=None, ge=0, le=150)
+    gender: str | None = None
+    contact: str | None = None
+
+
+class ClinicalDetails(_Details):
+    chief_complaint: str | None = None
+    problem_description: str | None = None
+    symptoms: str | None = None
+    duration: str | None = None
+    diagnosis_in_words: str | None = None
+    treatment: str | None = None
+    procedures: str | None = None
+    medications: str | None = None
+
+
+class AdmissionDetails(_Details):
+    admission_date: date | None = None
+    discharge_date: date | None = None
+    length_of_stay: str | None = None
+
+
+class ServicesDetails(_Details):
+    room_category: str | None = None
+    special_facilities: str | None = None
+    services_provided: str | None = None
+
+
+class HospitalDetails(_Details):
+    name: str | None = None
+    department: str | None = None
+    attending_doctor: str | None = None
+
+
+class InsuranceDetails(_Details):
+    company: str | None = None
+    policy_number: str | None = None
+
+
+class ClaimDetails(_Details):
+    """Hospital-entered claim details, stored under claim-files.details."""
+    patient: PatientDetails | None = None
+    clinical: ClinicalDetails | None = None
+    admission: AdmissionDetails | None = None
+    services: ServicesDetails | None = None
+    hospital: HospitalDetails | None = None
+    insurance: InsuranceDetails | None = None
+    estimated_total_cost: float | None = Field(default=None, ge=0)
+
+
 class ClaimIntake(BaseModel):
-    patient_id: str = Field(min_length=1, max_length=64)
-    payer_name: str = Field(min_length=1, max_length=200)
+    # Optional: the hospital create-claim form has no required fields.
+    patient_id: str | None = Field(default=None, max_length=64)
+    payer_name: str | None = Field(default=None, max_length=200)
     claim_type: str = Field(default="professional", min_length=1, max_length=64)
     submitted_by: str = Field(default="unknown", min_length=1, max_length=128)
     claim_amount: float | None = Field(default=None, gt=0)
     claim_id: str | None = Field(default=None, pattern=CLAIM_ID_PATTERN)
+    details: ClaimDetails | None = None
 
-    @field_validator("patient_id", "payer_name", "claim_type", "submitted_by", mode="before")
+    @field_validator("claim_type", "submitted_by", mode="before")
     @classmethod
     def _strip(cls, value):
         return value.strip() if isinstance(value, str) else value
+
+    @field_validator("patient_id", "payer_name", mode="before")
+    @classmethod
+    def _optional_strip(cls, value):
+        if isinstance(value, str):
+            return value.strip() or None
+        return value
 
     @field_validator("claim_id", mode="before")
     @classmethod

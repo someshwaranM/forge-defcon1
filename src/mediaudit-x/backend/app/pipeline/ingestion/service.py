@@ -23,6 +23,7 @@ from app.pipeline.ingestion.models import (
     DOC_TYPES,
     UPLOADABLE_STATUSES,
     CheckFailed,
+    ClaimDetails,
     ClaimIntake,
     FileInspection,
     IncomingFile,
@@ -41,6 +42,30 @@ def _now() -> str:
 
 def _new_id(prefix: str) -> str:
     return f"{prefix}-{uuid.uuid4().hex[:8].upper()}"
+
+
+def _flat_fields(details: ClaimDetails | None) -> dict:
+    """Top-level fields the frontend claim views read (hospital/claims/[id])."""
+    if details is None:
+        return {}
+    d = details.model_dump(mode="json")
+    patient, clinical = d.get("patient") or {}, d.get("clinical") or {}
+    admission, hospital = d.get("admission") or {}, d.get("hospital") or {}
+    insurance = d.get("insurance") or {}
+    flat = {
+        "patient_name": patient.get("name"),
+        "patient_age": patient.get("age"),
+        "patient_gender": patient.get("gender"),
+        "admission_date": admission.get("admission_date"),
+        "discharge_date": admission.get("discharge_date"),
+        "department": hospital.get("department"),
+        "attending_physician": hospital.get("attending_doctor"),
+        "hospital": hospital.get("name"),
+        "diagnosis_description": clinical.get("diagnosis_in_words"),
+        "procedure_name": clinical.get("procedures"),
+        "policy_id": insurance.get("policy_number"),
+    }
+    return {k: v for k, v in flat.items() if v is not None}
 
 
 class IngestionService:
@@ -63,22 +88,28 @@ class IngestionService:
         if self.repo.find_claim(claim_id):
             raise IngestionError(409, "claim_exists", f"Claim {claim_id} already exists.")
 
-        accepted, rejected = self._screen(files, claim_id)
-        if not accepted:
+        # Documents are optional at intake (the hospital form can be sent
+        # without any); if files were sent, at least one must pass.
+        accepted, rejected = self._screen(files, claim_id) if files else ([], [])
+        if files and not accepted:
             raise IngestionError(422, "no_valid_files", "None of the uploaded files passed validation.", rejected)
 
+        details = meta.details
         claim = {
             "claim_id": claim_id,
             "patient_id": meta.patient_id,
             "payer_name": meta.payer_name,
             "cpt_code": None,
             "icd10_code": None,
-            "claim_amount": meta.claim_amount,
+            "claim_amount": meta.claim_amount or (meta.details.estimated_total_cost if meta.details else None),
             "claim_type": meta.claim_type,
             "submitted_date": _now(),
             "submitted_by": meta.submitted_by,
             "status": "DRAFT",
             "source": "intake",
+            "details": details.model_dump(mode="json", exclude_none=True) if details else {},
+            # Flat copies of the details the hospital/insurance claim views read.
+            **_flat_fields(details),
             "attached_documents": [],
         }
         es_id = self.repo.create_claim(claim)

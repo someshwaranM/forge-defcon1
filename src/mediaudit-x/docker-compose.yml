@@ -54,8 +54,10 @@ services:
   frontend:
     build: ./frontend
     environment:
-      # The browser calls the API directly, so this is the host-side URL.
-      NEXT_PUBLIC_API_BASE_URL: http://localhost:${BACKEND_PORT:-8000}
+      # The browser calls the API directly, so this is the URL as seen from
+      # the browser. Point the UI at a remote backend with API_BASE_URL, e.g.
+      #   API_BASE_URL=http://187.77.130.9:8000 docker compose up -d --no-deps frontend
+      NEXT_PUBLIC_API_BASE_URL: ${API_BASE_URL:-http://localhost:${BACKEND_PORT:-8000}}
       WATCHPACK_POLLING: "true"  # file-change detection through Docker Desktop mounts
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
@@ -63,6 +65,7 @@ services:
       - ./frontend/app:/app/app
     depends_on:
       - backend
+    restart: unless-stopped
 
 volumes:
   uploads:
