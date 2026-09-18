@@ -11,8 +11,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { useRole } from "../../contexts/RoleContext";
 import {
   ArrowLeft,
   Play,
@@ -69,7 +70,16 @@ function parseSSEEvent(chunk: string): { event: string; data: string } | null {
 
 export default function ClaimDetailPage() {
   const params = useParams();
+  const router = useRouter();
+  const { role } = useRole();
   const claimId = params.id as string;
+
+  // Block hospital from accessing insurance adjudication page
+  useEffect(() => {
+    if (role === "hospital") {
+      router.push("/claims");
+    }
+  }, [role, router]);
 
   const [claim, setClaim] = useState<any>(null);
   const [tab, setTab] = useState<(typeof TABS)[number]>("Overview");

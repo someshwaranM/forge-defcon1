@@ -395,9 +395,8 @@ export default function InsuranceReviewPage() {
 
 // Generate AI Analysis (in production this comes from backend)
 function generateAIAnalysis(claim: any): AIAnalysisReport {
-  const isApprovalCase = claim.claim_id === "CLM-2026-00142";
-
-  if (isApprovalCase) {
+  // CLM-2026-00142: Approval case - Knee arthroplasty with full documentation
+  if (claim.claim_id === "CLM-2026-00142") {
     return {
       recommendation: "APPROVE",
       summary: "This claim meets all policy requirements and medical necessity criteria. The patient has documented conservative treatment for 187 days (exceeding the 180-day requirement), imaging confirms severe degenerative changes, and the procedure is medically appropriate for the documented condition.",
@@ -445,8 +444,183 @@ function generateAIAnalysis(claim: any): AIAnalysisReport {
         provider: claim.hospital,
       },
     };
-  } else {
-    // Insufficient evidence case
+  }
+
+  // CLM-2026-00201: Emergency visit - Approval
+  else if (claim.claim_id === "CLM-2026-00201") {
+    return {
+      recommendation: "APPROVE",
+      summary: "This emergency department claim for acute myocardial infarction meets all coverage criteria. The high-complexity ED visit (CPT 99285) is appropriate for the acuity level, and all documentation supports medical necessity.",
+      reasoning: {
+        policyCompliance: "Claim satisfies Policy POL-EMRG-089 (Emergency Services Coverage). Emergency condition properly documented with diagnostic findings confirming acute myocardial infarction (I21.09). No pre-authorization required for emergency services per policy guidelines.",
+        medicalNecessity: "Medical necessity clearly established. Patient presented with acute chest pain and diagnostic workup confirmed acute MI. Emergency intervention was appropriate and necessary. CPT 99285 (Emergency department visit, high complexity) is correctly coded for this level of acuity.",
+        patientHistory: "Patient presented to ED with acute symptoms requiring immediate evaluation. Appropriate emergency diagnostics and treatment provided. Condition required high-complexity medical decision making.",
+        riskFactors: [],
+      },
+      policyDetails: {
+        policyId: "POL-EMRG-089",
+        policyName: "Emergency Services Coverage",
+        requirementsMet: [
+          {
+            requirement: "Emergency Condition",
+            status: "SATISFIED",
+            explanation: "Acute MI qualifies as life-threatening emergency condition."
+          },
+          {
+            requirement: "Appropriate Level of Service",
+            status: "SATISFIED",
+            explanation: "CPT 99285 appropriate for documented acuity and complexity."
+          },
+          {
+            requirement: "Medical Necessity",
+            status: "SATISFIED",
+            explanation: "Immediate intervention medically necessary for life-threatening condition."
+          },
+        ],
+      },
+      claimDetails: {
+        diagnosis: claim.diagnosis_description,
+        procedure: claim.procedure_name,
+        amount: claim.claim_amount,
+        provider: claim.hospital,
+      },
+    };
+  }
+
+  // CLM-2026-00198: GI Endoscopy - Request more info
+  else if (claim.claim_id === "CLM-2026-00198") {
+    return {
+      recommendation: "REQUEST_INFO",
+      summary: "Additional documentation required for this endoscopy claim. While the procedure is appropriate for GI hemorrhage, records do not clearly establish whether conservative measures were attempted first as required by policy.",
+      reasoning: {
+        policyCompliance: "Policy POL-ENDO-034 requires documentation of initial conservative management attempts before endoscopic intervention for non-emergent GI bleeding. Current records do not clearly indicate presentation severity or whether immediate endoscopy was emergently indicated versus electively scheduled.",
+        medicalNecessity: "The diagnosis (K92.2 - Gastrointestinal hemorrhage, unspecified) and procedure (43239 - Upper GI endoscopy with biopsy) are clinically appropriate. However, medical necessity determination requires additional context about presentation severity, hemodynamic stability, and whether immediate intervention was required.",
+        patientHistory: "Limited information available about onset, severity of bleeding, prior episodes, or failed conservative treatments. Additional records needed to establish clinical timeline and decision-making rationale.",
+        riskFactors: [
+          "Incomplete documentation of presentation severity",
+          "No documentation of conservative treatment attempts",
+          "Unable to determine if procedure was emergent versus elective",
+        ],
+      },
+      policyDetails: {
+        policyId: "POL-ENDO-034",
+        policyName: "Endoscopy Procedures Policy",
+        requirementsMet: [
+          {
+            requirement: "Diagnosis Documentation",
+            status: "SATISFIED",
+            explanation: "GI hemorrhage diagnosis properly documented."
+          },
+          {
+            requirement: "Conservative Management Documentation",
+            status: "INSUFFICIENT_EVIDENCE",
+            explanation: "Records needed showing initial management approach and clinical decision-making."
+          },
+          {
+            requirement: "Clinical Indication",
+            status: "NEEDS_REVIEW",
+            explanation: "Requires additional documentation to establish indication urgency."
+          },
+        ],
+      },
+      claimDetails: {
+        diagnosis: claim.diagnosis_description,
+        procedure: claim.procedure_name,
+        amount: claim.claim_amount,
+        provider: claim.hospital,
+      },
+    };
+  }
+
+  // CLM-2026-00175: Rotator cuff repair - Approval
+  else if (claim.claim_id === "CLM-2026-00175") {
+    return {
+      recommendation: "APPROVE",
+      summary: "This arthroscopic rotator cuff repair claim meets all policy requirements. Complete rotator cuff tear is documented with imaging, conservative treatment was attempted and failed, and surgical intervention is medically appropriate.",
+      reasoning: {
+        policyCompliance: "Claim satisfies Policy POL-ORTH-067 (Orthopedic Surgical Procedures). MRI documentation confirms complete rotator cuff tear (M75.120). Conservative treatment including physical therapy and injections attempted for appropriate duration before surgical intervention.",
+        medicalNecessity: "Medical necessity is well-established. Complete rotator cuff tear documented on imaging with functional impairment. Failed conservative management including PT and corticosteroid injections. Arthroscopic repair (CPT 29826) is standard of care for complete tears with functional limitation.",
+        patientHistory: "Patient with documented complete rotator cuff tear, right shoulder. Conservative treatment attempted with inadequate response. Appropriate candidate for surgical repair based on tear characteristics and functional status.",
+        riskFactors: [],
+      },
+      policyDetails: {
+        policyId: "POL-ORTH-067",
+        policyName: "Orthopedic Surgical Procedures",
+        requirementsMet: [
+          {
+            requirement: "Imaging Documentation",
+            status: "SATISFIED",
+            explanation: "MRI confirms complete rotator cuff tear."
+          },
+          {
+            requirement: "Conservative Treatment",
+            status: "SATISFIED",
+            explanation: "PT and injections documented before surgical decision."
+          },
+          {
+            requirement: "Medical Necessity",
+            status: "SATISFIED",
+            explanation: "Complete tear with failed conservative treatment warrants surgical repair."
+          },
+        ],
+      },
+      claimDetails: {
+        diagnosis: claim.diagnosis_description,
+        procedure: claim.procedure_name,
+        amount: claim.claim_amount,
+        provider: claim.hospital,
+      },
+    };
+  }
+
+  // CLM-2026-00156: Prostatectomy - Denial
+  else if (claim.claim_id === "CLM-2026-00156") {
+    return {
+      recommendation: "DENY",
+      summary: "This claim for radical prostatectomy must be denied due to lack of required pre-authorization. Policy POL-SURG-123 mandates pre-authorization for all major oncologic surgical procedures, and no authorization was obtained prior to the procedure.",
+      reasoning: {
+        policyCompliance: "The claim does NOT satisfy Policy POL-SURG-123 pre-authorization requirements. All non-emergent major oncologic surgical procedures require pre-authorization at least 5 business days prior to scheduled procedure. Our records show no pre-authorization request was submitted. This is a policy violation regardless of medical appropriateness.",
+        medicalNecessity: "While the diagnosis of prostate cancer (C61) and the proposed radical prostatectomy may be medically appropriate, medical necessity cannot override mandatory pre-authorization requirements. The policy exists to ensure appropriate case review, coordinate care, and verify coverage eligibility before major procedures.",
+        patientHistory: "Patient has diagnosis of malignant neoplasm of prostate. While this is a serious condition, it is not classified as an emergency that would waive pre-authorization requirements. Adequate time existed to obtain prior authorization before elective surgical scheduling.",
+        riskFactors: [
+          "No pre-authorization obtained (required per policy)",
+          "Policy violation: POL-SURG-123 Section 4.2",
+          "Procedure performed without required advance approval",
+          "Provider responsibility to obtain authorization before scheduling",
+        ],
+      },
+      policyDetails: {
+        policyId: "POL-SURG-123",
+        policyName: "Major Surgical Procedures Authorization Policy",
+        requirementsMet: [
+          {
+            requirement: "Pre-Authorization",
+            status: "NOT_SATISFIED",
+            explanation: "No pre-authorization request submitted. Required 5+ business days before procedure."
+          },
+          {
+            requirement: "Diagnosis Documentation",
+            status: "SATISFIED",
+            explanation: "Prostate cancer diagnosis documented."
+          },
+          {
+            requirement: "Emergency Exemption",
+            status: "NOT_SATISFIED",
+            explanation: "Elective procedure does not qualify for emergency authorization waiver."
+          },
+        ],
+      },
+      claimDetails: {
+        diagnosis: claim.diagnosis_description,
+        procedure: claim.procedure_name,
+        amount: claim.claim_amount,
+        provider: claim.hospital,
+      },
+    };
+  }
+
+  // CLM-2026-00144: Insufficient evidence case (original second demo)
+  else {
     return {
       recommendation: "REQUEST_INFO",
       summary: "This claim cannot be approved at this time due to insufficient documentation of conservative treatment. While the diagnosis and procedure are appropriate, the medical records show only 62 documented days of physical therapy, falling significantly short of the required 180-day conservative treatment period.",
