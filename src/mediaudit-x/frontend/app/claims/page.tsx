@@ -66,9 +66,9 @@ export default function ClaimsPage() {
       </div>
 
       <div className="flex gap-2">
-        {FILTERS.map((f) => (
+        {FILTERS.map((f, idx) => (
           <button
-            key={f}
+            key={`filter-${idx}-${f}`}
             onClick={() => setFilter(f)}
             className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
               filter === f ? "bg-blue-600 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"

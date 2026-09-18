@@ -3,135 +3,136 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, FileText, Sparkles, CheckCircle, Upload } from "lucide-react";
+import { ArrowLeft, ArrowRight, FileText, Sparkles, CheckCircle, Upload, User, Hospital, DollarSign } from "lucide-react";
 import Button from "../../components/ui/Button";
 import Alert from "../../components/ui/Alert";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
 
 type Step = "details" | "generating" | "review" | "submitting" | "success";
 
-interface ClaimFormData {
-  // Patient Information
+interface SimpleClaimFormData {
+  // Patient Basic Info
   patientName: string;
-  patientId: string;
-  dateOfBirth: string;
-  gender: string;
-  contactNumber: string;
+  patientAge: string;
+  patientGender: string;
+  patientContact: string;
 
-  // Treatment Information
+  // Clinical Information (Plain Language)
+  chiefComplaint: string;
+  problemDescription: string;
+  symptomsDescription: string;
+  howLongProblem: string;
+
+  // Treatment Information (Plain Language)
+  treatmentDescription: string;
+  proceduresDescription: string;
+  medicationsGiven: string;
+  diagnosisInWords: string;
+
+  // Admission Details
   admissionDate: string;
   dischargeDate: string;
-  chiefComplaint: string;
-  diagnosisDescription: string;
-  treatmentProvided: string;
-  proceduresPerformed: string;
-  medicationsGiven: string;
+  lengthOfStay: string;
 
-  // Hospital & Facilities
-  hospitalName: string;
-  hospitalId: string;
-  department: string;
-  attendingPhysician: string;
-  roomType: string;
-  facilitiesProvided: string;
+  // Facilities & Services Provided (General)
+  roomCategory: string;
+  specialFacilities: string;
+  servicesProvided: string;
 
-  // Insurance Information
-  insuranceProvider: string;
+  // Hospital Information
+  departmentName: string;
+  attendingDoctor: string;
+
+  // Insurance & Billing (General)
+  insuranceCompany: string;
   policyNumber: string;
-  policyId: string;
-
-  // Billing
-  totalAmount: string;
-  roomCharges: string;
-  procedureCharges: string;
-  medicationCharges: string;
-  otherCharges: string;
+  estimatedTotalCost: string;
 }
 
 interface GeneratedClaimReport {
   claimId: string;
-  summary: string;
-  standardizedCodes: {
+
+  // AI Generated Technical Details
+  technicalCodes: {
     icd10Codes: Array<{ code: string; description: string; confidence: number }>;
     cptCodes: Array<{ code: string; description: string; confidence: number }>;
     rxNormCodes: Array<{ code: string; description: string; confidence: number }>;
   };
-  policyMatch: {
+
+  // Mapped Policy
+  matchedPolicy: {
     policyId: string;
     policyName: string;
     coverageStatus: string;
+    requirementsMet: string[];
   };
-  recommendedAmount: number;
+
+  // Clinical Summary (Technical)
+  technicalDiagnosis: string;
+  medicalNecessityJustification: string;
+
+  // Billing Breakdown
+  detailedBilling: {
+    roomCharges: number;
+    procedureCharges: number;
+    medicationCharges: number;
+    labCharges: number;
+    otherCharges: number;
+    totalAmount: number;
+  };
+
+  // Professional Documentation
+  formalClaimLetter: string;
   supportingEvidence: string[];
-  generatedLetter: string;
+
+  // Summary
+  executiveSummary: string;
 }
 
-const EMPTY_FORM: ClaimFormData = {
+const EMPTY_FORM: SimpleClaimFormData = {
   patientName: "",
-  patientId: "",
-  dateOfBirth: "",
-  gender: "",
-  contactNumber: "",
+  patientAge: "",
+  patientGender: "",
+  patientContact: "",
+  chiefComplaint: "",
+  problemDescription: "",
+  symptomsDescription: "",
+  howLongProblem: "",
+  treatmentDescription: "",
+  proceduresDescription: "",
+  medicationsGiven: "",
+  diagnosisInWords: "",
   admissionDate: "",
   dischargeDate: "",
-  chiefComplaint: "",
-  diagnosisDescription: "",
-  treatmentProvided: "",
-  proceduresPerformed: "",
-  medicationsGiven: "",
-  hospitalName: "CityCare Hospital",
-  hospitalId: "HOSP-001",
-  department: "",
-  attendingPhysician: "",
-  roomType: "",
-  facilitiesProvided: "",
-  insuranceProvider: "",
+  lengthOfStay: "",
+  roomCategory: "",
+  specialFacilities: "",
+  servicesProvided: "",
+  departmentName: "",
+  attendingDoctor: "",
+  insuranceCompany: "",
   policyNumber: "",
-  policyId: "",
-  totalAmount: "",
-  roomCharges: "",
-  procedureCharges: "",
-  medicationCharges: "",
-  otherCharges: "",
+  estimatedTotalCost: "",
 };
 
 export default function CreateClaimPage() {
   const router = useRouter();
   const [step, setStep] = useState<Step>("details");
-  const [formData, setFormData] = useState<ClaimFormData>(EMPTY_FORM);
+  const [formData, setFormData] = useState<SimpleClaimFormData>(EMPTY_FORM);
   const [generatedReport, setGeneratedReport] = useState<GeneratedClaimReport | null>(null);
-  const [editMode, setEditMode] = useState(false);
 
-  const updateForm = <K extends keyof ClaimFormData>(key: K, value: ClaimFormData[K]) => {
+  const updateForm = <K extends keyof SimpleClaimFormData>(key: K, value: SimpleClaimFormData[K]) => {
     setFormData((prev) => ({ ...prev, [key]: value }));
   };
 
   const handleGenerateReport = async () => {
     setStep("generating");
 
-    // Simulate LLM processing
-    await new Promise((resolve) => setTimeout(resolve, 3000));
+    // Simulate AI processing - in production, this calls the LLM API
+    await new Promise((resolve) => setTimeout(resolve, 4000));
 
-    // Generate the claim report
-    const report: GeneratedClaimReport = {
-      claimId: `CLM-${Date.now()}`,
-      summary: generateClaimSummary(formData),
-      standardizedCodes: generateStandardizedCodes(formData),
-      policyMatch: {
-        policyId: formData.policyId || "POL-KNEE-042",
-        policyName: "Total Knee Replacement Coverage",
-        coverageStatus: "COVERED",
-      },
-      recommendedAmount: parseFloat(formData.totalAmount) || 48000,
-      supportingEvidence: [
-        "Clinical notes documenting diagnosis",
-        "Treatment records showing conservative therapy",
-        "Imaging reports (MRI/X-Ray)",
-        "Medication administration records",
-        "Discharge summary",
-      ],
-      generatedLetter: generateFormalLetter(formData),
-    };
+    // AI generates all technical details from general descriptions
+    const report: GeneratedClaimReport = generateTechnicalReport(formData);
 
     setGeneratedReport(report);
     setStep("review");
@@ -139,15 +140,11 @@ export default function CreateClaimPage() {
 
   const handleApproveAndSubmit = async () => {
     setStep("submitting");
-
-    // Simulate submission to insurance
     await new Promise((resolve) => setTimeout(resolve, 2000));
-
     setStep("success");
   };
 
   const handleEditAndRegenerate = () => {
-    setEditMode(true);
     setStep("details");
   };
 
@@ -162,7 +159,7 @@ export default function CreateClaimPage() {
           </div>
           <h1 className="text-2xl font-semibold text-slate-900 mb-2">Claim Submitted Successfully!</h1>
           <p className="text-slate-600 mb-6">
-            Your claim has been generated, reviewed, and submitted to the insurance company.
+            Your claim has been generated with all technical details, reviewed, and submitted to the insurance company.
           </p>
 
           <div className="bg-slate-50 rounded-lg p-4 mb-6 text-left">
@@ -177,11 +174,11 @@ export default function CreateClaimPage() {
               </div>
               <div>
                 <span className="text-slate-500">Insurance:</span>
-                <div className="font-semibold text-slate-900">{formData.insuranceProvider}</div>
+                <div className="font-semibold text-slate-900">{formData.insuranceCompany}</div>
               </div>
               <div>
                 <span className="text-slate-500">Amount:</span>
-                <div className="font-semibold text-slate-900">${generatedReport?.recommendedAmount.toLocaleString()}</div>
+                <div className="font-semibold text-slate-900">${generatedReport?.detailedBilling.totalAmount.toLocaleString()}</div>
               </div>
             </div>
           </div>
@@ -194,7 +191,6 @@ export default function CreateClaimPage() {
               setStep("details");
               setFormData(EMPTY_FORM);
               setGeneratedReport(null);
-              setEditMode(false);
             }}>
               Create Another Claim
             </Button>
@@ -205,15 +201,15 @@ export default function CreateClaimPage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto space-y-5">
+    <div className="max-w-4xl mx-auto space-y-5">
       {/* Header */}
       <div>
         <Link href="/claims" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-2">
           <ArrowLeft size={14} /> Back to Claims
         </Link>
-        <h1 className="text-2xl font-semibold text-slate-900">Create New Claim</h1>
+        <h1 className="text-2xl font-semibold text-slate-900">Create Insurance Claim</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Enter treatment details and generate a formatted claim report for insurance submission
+          Describe the patient's treatment in simple terms. Our AI will generate all technical codes and documentation.
         </p>
       </div>
 
@@ -222,14 +218,14 @@ export default function CreateClaimPage() {
         <div className="flex items-center justify-between">
           <StepIndicator
             number={1}
-            label="Enter Details"
+            label="Describe Treatment"
             active={step === "details"}
             completed={step !== "details"}
           />
           <div className="flex-1 h-0.5 bg-slate-200 mx-4" />
           <StepIndicator
             number={2}
-            label="Generate Report"
+            label="AI Generates Details"
             active={step === "generating"}
             completed={step === "review" || step === "submitting" || step === "success"}
           />
@@ -250,44 +246,43 @@ export default function CreateClaimPage() {
         </div>
       </div>
 
-      {/* Step 1: Enter Details */}
+      {/* Step 1: Enter Simple Details */}
       {step === "details" && (
         <form className="space-y-5" onSubmit={(e) => { e.preventDefault(); handleGenerateReport(); }}>
+          <Alert type="info" title="No Technical Knowledge Required">
+            Just describe the treatment in your own words. The AI will handle all medical codes, technical terms, and insurance documentation.
+          </Alert>
+
           {/* Patient Information */}
           <div className="card p-5">
-            <h2 className="text-lg font-semibold text-slate-900 mb-4">Patient Information</h2>
+            <div className="flex items-center gap-2 mb-4">
+              <User size={20} className="text-blue-600" />
+              <h2 className="text-lg font-semibold text-slate-900">Patient Information</h2>
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <FormField label="Patient Name" required>
                 <input
                   value={formData.patientName}
                   onChange={(e) => updateForm("patientName", e.target.value)}
-                  placeholder="John Doe"
+                  placeholder="e.g., John Doe"
                   className="input"
                   required
                 />
               </FormField>
-              <FormField label="Patient ID" required>
+              <FormField label="Age" required>
                 <input
-                  value={formData.patientId}
-                  onChange={(e) => updateForm("patientId", e.target.value)}
-                  placeholder="PAT-883910"
-                  className="input"
-                  required
-                />
-              </FormField>
-              <FormField label="Date of Birth" required>
-                <input
-                  type="date"
-                  value={formData.dateOfBirth}
-                  onChange={(e) => updateForm("dateOfBirth", e.target.value)}
+                  type="number"
+                  value={formData.patientAge}
+                  onChange={(e) => updateForm("patientAge", e.target.value)}
+                  placeholder="e.g., 65"
                   className="input"
                   required
                 />
               </FormField>
               <FormField label="Gender" required>
                 <select
-                  value={formData.gender}
-                  onChange={(e) => updateForm("gender", e.target.value)}
+                  value={formData.patientGender}
+                  onChange={(e) => updateForm("patientGender", e.target.value)}
                   className="input"
                   required
                 >
@@ -299,10 +294,73 @@ export default function CreateClaimPage() {
               </FormField>
               <FormField label="Contact Number">
                 <input
-                  value={formData.contactNumber}
-                  onChange={(e) => updateForm("contactNumber", e.target.value)}
-                  placeholder="+1 (555) 123-4567"
+                  value={formData.patientContact}
+                  onChange={(e) => updateForm("patientContact", e.target.value)}
+                  placeholder="e.g., (555) 123-4567"
                   className="input"
+                />
+              </FormField>
+            </div>
+          </div>
+
+          {/* Clinical Information (Plain Language) */}
+          <div className="card p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <FileText size={20} className="text-purple-600" />
+              <h2 className="text-lg font-semibold text-slate-900">What Brought the Patient In?</h2>
+              <span className="text-xs text-slate-500">(Describe in plain language)</span>
+            </div>
+            <div className="space-y-4">
+              <FormField label="Main Complaint" required>
+                <input
+                  value={formData.chiefComplaint}
+                  onChange={(e) => updateForm("chiefComplaint", e.target.value)}
+                  placeholder="e.g., Severe knee pain"
+                  className="input"
+                  required
+                />
+              </FormField>
+
+              <FormField label="Describe the Problem" className="col-span-2" required>
+                <textarea
+                  value={formData.problemDescription}
+                  onChange={(e) => updateForm("problemDescription", e.target.value)}
+                  placeholder="e.g., Patient has severe arthritis in right knee. Bone grinding on bone. Can't walk properly or climb stairs."
+                  className="input"
+                  rows={3}
+                  required
+                />
+              </FormField>
+
+              <FormField label="Symptoms" required>
+                <textarea
+                  value={formData.symptomsDescription}
+                  onChange={(e) => updateForm("symptomsDescription", e.target.value)}
+                  placeholder="e.g., Constant pain, swelling, stiffness, difficulty walking, can't sleep due to pain"
+                  className="input"
+                  rows={2}
+                  required
+                />
+              </FormField>
+
+              <FormField label="How Long Has This Been a Problem?" required>
+                <input
+                  value={formData.howLongProblem}
+                  onChange={(e) => updateForm("howLongProblem", e.target.value)}
+                  placeholder="e.g., Over 2 years, getting worse"
+                  className="input"
+                  required
+                />
+              </FormField>
+
+              <FormField label="What Did We Diagnose?" required>
+                <textarea
+                  value={formData.diagnosisInWords}
+                  onChange={(e) => updateForm("diagnosisInWords", e.target.value)}
+                  placeholder="e.g., Severe wear and tear arthritis of the right knee with damaged cartilage"
+                  className="input"
+                  rows={2}
+                  required
                 />
               </FormField>
             </div>
@@ -310,7 +368,49 @@ export default function CreateClaimPage() {
 
           {/* Treatment Information */}
           <div className="card p-5">
-            <h2 className="text-lg font-semibold text-slate-900 mb-4">Treatment Information</h2>
+            <div className="flex items-center gap-2 mb-4">
+              <Hospital size={20} className="text-emerald-600" />
+              <h2 className="text-lg font-semibold text-slate-900">Treatment Provided</h2>
+              <span className="text-xs text-slate-500">(What we did to help)</span>
+            </div>
+            <div className="space-y-4">
+              <FormField label="Treatment Summary" required>
+                <textarea
+                  value={formData.treatmentDescription}
+                  onChange={(e) => updateForm("treatmentDescription", e.target.value)}
+                  placeholder="e.g., Patient tried physical therapy for 6 months but didn't improve. Replaced the damaged knee with an artificial one."
+                  className="input"
+                  rows={3}
+                  required
+                />
+              </FormField>
+
+              <FormField label="Procedures/Surgery Performed" required>
+                <textarea
+                  value={formData.proceduresDescription}
+                  onChange={(e) => updateForm("proceduresDescription", e.target.value)}
+                  placeholder="e.g., Knee replacement surgery - removed damaged knee joint and put in artificial joint"
+                  className="input"
+                  rows={2}
+                  required
+                />
+              </FormField>
+
+              <FormField label="Medications Given">
+                <textarea
+                  value={formData.medicationsGiven}
+                  onChange={(e) => updateForm("medicationsGiven", e.target.value)}
+                  placeholder="e.g., Pain medicine, blood thinner to prevent clots, anti-inflammatory medicine"
+                  className="input"
+                  rows={2}
+                />
+              </FormField>
+            </div>
+          </div>
+
+          {/* Hospital Stay Details */}
+          <div className="card p-5">
+            <h2 className="text-lg font-semibold text-slate-900 mb-4">Hospital Stay Details</h2>
             <div className="grid grid-cols-2 gap-4">
               <FormField label="Admission Date" required>
                 <input
@@ -330,115 +430,94 @@ export default function CreateClaimPage() {
                   required
                 />
               </FormField>
-              <FormField label="Chief Complaint" className="col-span-2" required>
-                <textarea
-                  value={formData.chiefComplaint}
-                  onChange={(e) => updateForm("chiefComplaint", e.target.value)}
-                  placeholder="Patient's main complaint or reason for visit..."
+              <FormField label="Total Days in Hospital" required>
+                <input
+                  type="number"
+                  value={formData.lengthOfStay}
+                  onChange={(e) => updateForm("lengthOfStay", e.target.value)}
+                  placeholder="e.g., 4"
                   className="input"
-                  rows={2}
                   required
-                />
-              </FormField>
-              <FormField label="Diagnosis Description" className="col-span-2" required>
-                <textarea
-                  value={formData.diagnosisDescription}
-                  onChange={(e) => updateForm("diagnosisDescription", e.target.value)}
-                  placeholder="Detailed diagnosis (e.g., Severe osteoarthritis of right knee, Grade 4 chondromalacia...)"
-                  className="input"
-                  rows={3}
-                  required
-                />
-              </FormField>
-              <FormField label="Treatment Provided" className="col-span-2" required>
-                <textarea
-                  value={formData.treatmentProvided}
-                  onChange={(e) => updateForm("treatmentProvided", e.target.value)}
-                  placeholder="Describe all treatments provided..."
-                  className="input"
-                  rows={3}
-                  required
-                />
-              </FormField>
-              <FormField label="Procedures Performed" className="col-span-2" required>
-                <textarea
-                  value={formData.proceduresPerformed}
-                  onChange={(e) => updateForm("proceduresPerformed", e.target.value)}
-                  placeholder="List all procedures (e.g., Total knee arthroplasty, right side...)"
-                  className="input"
-                  rows={2}
-                  required
-                />
-              </FormField>
-              <FormField label="Medications Given" className="col-span-2">
-                <textarea
-                  value={formData.medicationsGiven}
-                  onChange={(e) => updateForm("medicationsGiven", e.target.value)}
-                  placeholder="List medications with dosages..."
-                  className="input"
-                  rows={2}
                 />
               </FormField>
             </div>
           </div>
 
-          {/* Hospital & Facilities */}
+          {/* Facilities & Services */}
           <div className="card p-5">
-            <h2 className="text-lg font-semibold text-slate-900 mb-4">Hospital & Facilities</h2>
-            <div className="grid grid-cols-2 gap-4">
-              <FormField label="Department" required>
-                <input
-                  value={formData.department}
-                  onChange={(e) => updateForm("department", e.target.value)}
-                  placeholder="Orthopedics"
-                  className="input"
-                  required
-                />
-              </FormField>
-              <FormField label="Attending Physician" required>
-                <input
-                  value={formData.attendingPhysician}
-                  onChange={(e) => updateForm("attendingPhysician", e.target.value)}
-                  placeholder="Dr. Smith"
-                  className="input"
-                  required
-                />
-              </FormField>
+            <h2 className="text-lg font-semibold text-slate-900 mb-4">Facilities & Services Used</h2>
+            <div className="space-y-4">
               <FormField label="Room Type" required>
                 <select
-                  value={formData.roomType}
-                  onChange={(e) => updateForm("roomType", e.target.value)}
+                  value={formData.roomCategory}
+                  onChange={(e) => updateForm("roomCategory", e.target.value)}
                   className="input"
                   required
                 >
                   <option value="">Select...</option>
-                  <option value="General Ward">General Ward</option>
-                  <option value="Semi-Private">Semi-Private</option>
-                  <option value="Private">Private</option>
-                  <option value="ICU">ICU</option>
+                  <option value="General Ward">General Ward (shared room)</option>
+                  <option value="Semi-Private">Semi-Private (2 beds)</option>
+                  <option value="Private">Private Room</option>
+                  <option value="ICU">Intensive Care Unit (ICU)</option>
+                  <option value="Deluxe">Deluxe Room</option>
                 </select>
               </FormField>
-              <FormField label="Facilities Provided" className="col-span-2">
+
+              <FormField label="Special Facilities Used">
                 <textarea
-                  value={formData.facilitiesProvided}
-                  onChange={(e) => updateForm("facilitiesProvided", e.target.value)}
-                  placeholder="Operating room, recovery room, physical therapy, nursing care..."
+                  value={formData.specialFacilities}
+                  onChange={(e) => updateForm("specialFacilities", e.target.value)}
+                  placeholder="e.g., Operating theater, Recovery room, X-ray machine, MRI scanner"
                   className="input"
                   rows={2}
                 />
               </FormField>
+
+              <FormField label="Services Provided">
+                <textarea
+                  value={formData.servicesProvided}
+                  onChange={(e) => updateForm("servicesProvided", e.target.value)}
+                  placeholder="e.g., 24-hour nursing care, Physical therapy sessions, Meals, Doctor visits"
+                  className="input"
+                  rows={2}
+                />
+              </FormField>
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField label="Department" required>
+                  <input
+                    value={formData.departmentName}
+                    onChange={(e) => updateForm("departmentName", e.target.value)}
+                    placeholder="e.g., Orthopedics"
+                    className="input"
+                    required
+                  />
+                </FormField>
+                <FormField label="Attending Doctor" required>
+                  <input
+                    value={formData.attendingDoctor}
+                    onChange={(e) => updateForm("attendingDoctor", e.target.value)}
+                    placeholder="e.g., Dr. Sarah Mitchell"
+                    className="input"
+                    required
+                  />
+                </FormField>
+              </div>
             </div>
           </div>
 
           {/* Insurance & Billing */}
           <div className="card p-5">
-            <h2 className="text-lg font-semibold text-slate-900 mb-4">Insurance & Billing</h2>
+            <div className="flex items-center gap-2 mb-4">
+              <DollarSign size={20} className="text-amber-600" />
+              <h2 className="text-lg font-semibold text-slate-900">Insurance & Billing</h2>
+            </div>
             <div className="grid grid-cols-2 gap-4">
-              <FormField label="Insurance Provider" required>
+              <FormField label="Insurance Company" required>
                 <input
-                  value={formData.insuranceProvider}
-                  onChange={(e) => updateForm("insuranceProvider", e.target.value)}
-                  placeholder="ABC Health Insurance"
+                  value={formData.insuranceCompany}
+                  onChange={(e) => updateForm("insuranceCompany", e.target.value)}
+                  placeholder="e.g., ABC Health Insurance"
                   className="input"
                   required
                 />
@@ -447,69 +526,22 @@ export default function CreateClaimPage() {
                 <input
                   value={formData.policyNumber}
                   onChange={(e) => updateForm("policyNumber", e.target.value)}
-                  placeholder="POL-123456"
+                  placeholder="e.g., ABC-POL-123456"
                   className="input"
                   required
                 />
               </FormField>
-              <FormField label="Policy ID">
-                <input
-                  value={formData.policyId}
-                  onChange={(e) => updateForm("policyId", e.target.value)}
-                  placeholder="POL-KNEE-042"
-                  className="input"
-                />
-              </FormField>
-              <FormField label="Total Amount" required>
+              <FormField label="Estimated Total Cost ($)" required className="col-span-2">
                 <input
                   type="number"
                   step="0.01"
-                  value={formData.totalAmount}
-                  onChange={(e) => updateForm("totalAmount", e.target.value)}
-                  placeholder="48000"
+                  value={formData.estimatedTotalCost}
+                  onChange={(e) => updateForm("estimatedTotalCost", e.target.value)}
+                  placeholder="e.g., 48000"
                   className="input"
                   required
                 />
-              </FormField>
-              <FormField label="Room Charges">
-                <input
-                  type="number"
-                  step="0.01"
-                  value={formData.roomCharges}
-                  onChange={(e) => updateForm("roomCharges", e.target.value)}
-                  placeholder="8000"
-                  className="input"
-                />
-              </FormField>
-              <FormField label="Procedure Charges">
-                <input
-                  type="number"
-                  step="0.01"
-                  value={formData.procedureCharges}
-                  onChange={(e) => updateForm("procedureCharges", e.target.value)}
-                  placeholder="35000"
-                  className="input"
-                />
-              </FormField>
-              <FormField label="Medication Charges">
-                <input
-                  type="number"
-                  step="0.01"
-                  value={formData.medicationCharges}
-                  onChange={(e) => updateForm("medicationCharges", e.target.value)}
-                  placeholder="3000"
-                  className="input"
-                />
-              </FormField>
-              <FormField label="Other Charges">
-                <input
-                  type="number"
-                  step="0.01"
-                  value={formData.otherCharges}
-                  onChange={(e) => updateForm("otherCharges", e.target.value)}
-                  placeholder="2000"
-                  className="input"
-                />
+                <p className="mt-1 text-xs text-slate-500">AI will break this down into room, procedure, medication, and other charges</p>
               </FormField>
             </div>
           </div>
@@ -521,103 +553,146 @@ export default function CreateClaimPage() {
               size="lg"
               icon={<Sparkles size={18} />}
             >
-              Generate Claim Report with AI
+              Generate Technical Claim Report
               <ArrowRight size={18} />
             </Button>
           </div>
         </form>
       )}
 
-      {/* Step 2: Generating */}
+      {/* Step 2: AI Generating */}
       {step === "generating" && (
         <div className="card p-12">
-          <LoadingSpinner size={48} message="AI is generating your claim report..." />
+          <LoadingSpinner size={48} message="AI is generating your technical claim report..." />
           <div className="mt-6 space-y-2 text-center text-sm text-slate-600">
-            <p>✓ Analyzing treatment details</p>
-            <p>✓ Mapping to standardized medical codes</p>
-            <p>✓ Matching against policy requirements</p>
-            <p className="animate-pulse">● Generating formal claim letter...</p>
+            <p>✓ Analyzing treatment description</p>
+            <p>✓ Mapping to ICD-10 diagnosis codes</p>
+            <p>✓ Mapping to CPT procedure codes</p>
+            <p>✓ Identifying medication codes (RxNorm)</p>
+            <p>✓ Matching insurance policy requirements</p>
+            <p>✓ Breaking down billing charges</p>
+            <p className="animate-pulse">● Generating formal documentation...</p>
           </div>
         </div>
       )}
 
-      {/* Step 3: Review Generated Report */}
+      {/* Step 3: Review Generated Technical Report */}
       {step === "review" && generatedReport && (
         <div className="space-y-5">
-          <Alert type="success" title="Claim Report Generated Successfully">
-            Review the AI-generated claim report below. You can approve and submit it to the insurance company, or edit the details and regenerate.
+          <Alert type="success" title="Technical Claim Report Generated">
+            AI has generated all medical codes, technical documentation, and formal insurance submission letter. Review below and approve to submit.
           </Alert>
 
-          {/* Generated Report Preview */}
+          {/* Executive Summary */}
+          <div className="card p-5 bg-blue-50 border-2 border-blue-200">
+            <h2 className="text-lg font-semibold text-blue-900 mb-3">📋 Executive Summary</h2>
+            <p className="text-sm text-blue-800 leading-relaxed">{generatedReport.executiveSummary}</p>
+          </div>
+
+          {/* Technical Medical Codes (AI Generated) */}
           <div className="card p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-slate-900">Generated Claim Report</h2>
-              <span className="text-sm font-medium text-blue-600">{generatedReport.claimId}</span>
-            </div>
+            <h2 className="text-lg font-semibold text-slate-900 mb-3">🔬 AI-Generated Medical Codes</h2>
+            <p className="text-sm text-slate-600 mb-4">These standardized codes were automatically mapped from your description:</p>
 
-            {/* Summary */}
-            <div className="mb-5">
-              <h3 className="text-sm font-semibold text-slate-700 mb-2">Claim Summary</h3>
-              <div className="bg-slate-50 rounded-lg p-4 text-sm text-slate-700">
-                {generatedReport.summary}
+            <div className="space-y-4">
+              {generatedReport.technicalCodes.icd10Codes.length > 0 && (
+                <CodeSection
+                  title="ICD-10 Diagnosis Codes"
+                  subtitle="What's wrong with the patient"
+                  codes={generatedReport.technicalCodes.icd10Codes}
+                />
+              )}
+              {generatedReport.technicalCodes.cptCodes.length > 0 && (
+                <CodeSection
+                  title="CPT Procedure Codes"
+                  subtitle="What we did"
+                  codes={generatedReport.technicalCodes.cptCodes}
+                />
+              )}
+              {generatedReport.technicalCodes.rxNormCodes.length > 0 && (
+                <CodeSection
+                  title="RxNorm Medication Codes"
+                  subtitle="Medicines given"
+                  codes={generatedReport.technicalCodes.rxNormCodes}
+                />
+              )}
+            </div>
+          </div>
+
+          {/* Policy Match */}
+          <div className="card p-5">
+            <h2 className="text-lg font-semibold text-slate-900 mb-3">🏥 Insurance Policy Match</h2>
+            <div className="bg-emerald-50 rounded-lg p-4 border-2 border-emerald-200">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <div className="font-semibold text-emerald-900 text-lg">{generatedReport.matchedPolicy.policyName}</div>
+                  <div className="text-sm text-emerald-700">Policy ID: {generatedReport.matchedPolicy.policyId}</div>
+                </div>
+                <span className="badge badge-approved text-base">{generatedReport.matchedPolicy.coverageStatus}</span>
               </div>
+              {generatedReport.matchedPolicy.requirementsMet.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-emerald-200">
+                  <div className="text-xs font-semibold text-emerald-800 mb-2">Requirements Met:</div>
+                  <ul className="space-y-1">
+                    {generatedReport.matchedPolicy.requirementsMet.map((req, idx) => (
+                      <li key={idx} className="flex items-center gap-2 text-sm text-emerald-700">
+                        <CheckCircle size={14} className="text-emerald-600" />
+                        {req}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
+          </div>
 
-            {/* Standardized Codes */}
-            <div className="mb-5">
-              <h3 className="text-sm font-semibold text-slate-700 mb-2">Standardized Medical Codes</h3>
-              <div className="space-y-3">
-                {generatedReport.standardizedCodes.icd10Codes.length > 0 && (
-                  <CodeSection
-                    title="ICD-10 Diagnosis Codes"
-                    codes={generatedReport.standardizedCodes.icd10Codes}
-                  />
-                )}
-                {generatedReport.standardizedCodes.cptCodes.length > 0 && (
-                  <CodeSection
-                    title="CPT Procedure Codes"
-                    codes={generatedReport.standardizedCodes.cptCodes}
-                  />
-                )}
-                {generatedReport.standardizedCodes.rxNormCodes.length > 0 && (
-                  <CodeSection
-                    title="RxNorm Medication Codes"
-                    codes={generatedReport.standardizedCodes.rxNormCodes}
-                  />
-                )}
+          {/* Technical Diagnosis & Justification */}
+          <div className="card p-5">
+            <h2 className="text-lg font-semibold text-slate-900 mb-3">🩺 Technical Medical Documentation</h2>
+
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-700 mb-2">Clinical Diagnosis (Technical):</h3>
+                <div className="bg-slate-50 rounded-lg p-3 text-sm text-slate-700">
+                  {generatedReport.technicalDiagnosis}
+                </div>
               </div>
-            </div>
 
-            {/* Policy Match */}
-            <div className="mb-5">
-              <h3 className="text-sm font-semibold text-slate-700 mb-2">Policy Match</h3>
-              <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="font-semibold text-blue-900">{generatedReport.policyMatch.policyName}</div>
-                    <div className="text-sm text-blue-700">Policy ID: {generatedReport.policyMatch.policyId}</div>
-                  </div>
-                  <span className="badge badge-approved">{generatedReport.policyMatch.coverageStatus}</span>
+              <div>
+                <h3 className="text-sm font-semibold text-slate-700 mb-2">Medical Necessity Justification:</h3>
+                <div className="bg-slate-50 rounded-lg p-3 text-sm text-slate-700">
+                  {generatedReport.medicalNecessityJustification}
                 </div>
               </div>
             </div>
+          </div>
 
-            {/* Recommended Amount */}
-            <div className="mb-5">
-              <h3 className="text-sm font-semibold text-slate-700 mb-2">Recommended Claim Amount</h3>
-              <div className="text-2xl font-bold text-slate-900">
-                ${generatedReport.recommendedAmount.toLocaleString()}
+          {/* Detailed Billing Breakdown */}
+          <div className="card p-5">
+            <h2 className="text-lg font-semibold text-slate-900 mb-3">💰 Detailed Billing Breakdown</h2>
+            <p className="text-sm text-slate-600 mb-3">AI has categorized costs into standard billing categories:</p>
+
+            <div className="space-y-2 text-sm">
+              <BillingLine label="Room & Accommodation" amount={generatedReport.detailedBilling.roomCharges} />
+              <BillingLine label="Procedures & Surgery" amount={generatedReport.detailedBilling.procedureCharges} />
+              <BillingLine label="Medications & Pharmacy" amount={generatedReport.detailedBilling.medicationCharges} />
+              <BillingLine label="Lab Tests & Diagnostics" amount={generatedReport.detailedBilling.labCharges} />
+              <BillingLine label="Other Services" amount={generatedReport.detailedBilling.otherCharges} />
+              <div className="pt-2 border-t-2 border-slate-300 mt-2">
+                <BillingLine label="Total Claim Amount" amount={generatedReport.detailedBilling.totalAmount} bold />
               </div>
             </div>
+          </div>
 
-            {/* Formal Letter */}
-            <div>
-              <h3 className="text-sm font-semibold text-slate-700 mb-2">Formal Claim Letter</h3>
-              <div className="bg-white rounded-lg p-6 border border-slate-200">
-                <pre className="whitespace-pre-wrap text-sm text-slate-700 font-sans">
-                  {generatedReport.generatedLetter}
-                </pre>
-              </div>
+          {/* Formal Insurance Letter */}
+          <div className="card p-5">
+            <h2 className="text-lg font-semibold text-slate-900 mb-3">📄 Formal Insurance Claim Letter</h2>
+            <p className="text-sm text-slate-600 mb-3">Professional documentation ready for insurance submission:</p>
+
+            <div className="bg-white rounded-lg p-6 border-2 border-slate-200">
+              <pre className="whitespace-pre-wrap text-sm text-slate-700 font-sans leading-relaxed">
+                {generatedReport.formalClaimLetter}
+              </pre>
             </div>
           </div>
 
@@ -630,14 +705,22 @@ export default function CreateClaimPage() {
             >
               Edit Details & Regenerate
             </Button>
-            <Button
-              variant="primary"
-              size="lg"
-              onClick={handleApproveAndSubmit}
-              icon={<CheckCircle size={18} />}
-            >
-              Approve & Submit to Insurance
-            </Button>
+            <div className="flex items-center gap-3">
+              <div className="text-right">
+                <div className="text-xs text-slate-600">Total Claim Amount</div>
+                <div className="text-2xl font-bold text-slate-900">
+                  ${generatedReport.detailedBilling.totalAmount.toLocaleString()}
+                </div>
+              </div>
+              <Button
+                variant="primary"
+                size="lg"
+                onClick={handleApproveAndSubmit}
+                icon={<CheckCircle size={18} />}
+              >
+                Approve & Submit to Insurance
+              </Button>
+            </div>
           </div>
         </div>
       )}
@@ -647,7 +730,7 @@ export default function CreateClaimPage() {
         <div className="card p-12">
           <LoadingSpinner size={48} message="Submitting claim to insurance company..." />
           <p className="mt-4 text-center text-sm text-slate-600">
-            Your claim is being securely transmitted...
+            Your technical claim documentation is being securely transmitted...
           </p>
         </div>
       )}
@@ -655,6 +738,7 @@ export default function CreateClaimPage() {
   );
 }
 
+// Helper Components
 function StepIndicator({ number, label, active, completed }: { number: number; label: string; active: boolean; completed: boolean }) {
   return (
     <div className="flex flex-col items-center">
@@ -669,7 +753,7 @@ function StepIndicator({ number, label, active, completed }: { number: number; l
       >
         {completed ? <CheckCircle size={20} /> : number}
       </div>
-      <span className={`mt-2 text-xs font-medium ${active || completed ? "text-slate-700" : "text-slate-400"}`}>
+      <span className={`mt-2 text-xs font-medium text-center ${active || completed ? "text-slate-700" : "text-slate-400"}`}>
         {label}
       </span>
     </div>
@@ -687,18 +771,23 @@ function FormField({ label, required, className = "", children }: { label: strin
   );
 }
 
-function CodeSection({ title, codes }: { title: string; codes: Array<{ code: string; description: string; confidence: number }> }) {
+function CodeSection({ title, subtitle, codes }: { title: string; subtitle?: string; codes: Array<{ code: string; description: string; confidence: number }> }) {
   return (
-    <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
-      <div className="text-xs font-semibold text-slate-600 mb-2">{title}</div>
-      <div className="space-y-1.5">
+    <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <div className="text-sm font-semibold text-slate-900">{title}</div>
+          {subtitle && <div className="text-xs text-slate-600">{subtitle}</div>}
+        </div>
+      </div>
+      <div className="space-y-2">
         {codes.map((item, idx) => (
-          <div key={idx} className="flex items-center justify-between text-sm">
+          <div key={idx} className="flex items-start justify-between bg-white rounded p-2 text-sm">
             <div className="flex-1">
               <span className="font-semibold text-slate-900">{item.code}</span>
               <span className="text-slate-600 ml-2">— {item.description}</span>
             </div>
-            <span className={`text-xs font-medium ${item.confidence >= 0.9 ? "text-emerald-600" : item.confidence >= 0.7 ? "text-amber-600" : "text-red-600"}`}>
+            <span className={`text-xs font-medium px-2 py-0.5 rounded ${item.confidence >= 0.9 ? "bg-emerald-100 text-emerald-700" : item.confidence >= 0.7 ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"}`}>
               {Math.round(item.confidence * 100)}%
             </span>
           </div>
@@ -708,83 +797,162 @@ function CodeSection({ title, codes }: { title: string; codes: Array<{ code: str
   );
 }
 
-// Helper functions for generating report content
-function generateClaimSummary(data: ClaimFormData): string {
-  return `Patient ${data.patientName} (${data.patientId}) was admitted to ${data.hospitalName} on ${data.admissionDate} with chief complaint of ${data.chiefComplaint}. Following comprehensive evaluation and treatment, the patient was diagnosed with ${data.diagnosisDescription}. Treatment included ${data.treatmentProvided}. The procedures performed were: ${data.proceduresPerformed}. Patient was discharged on ${data.dischargeDate} in stable condition.`;
+function BillingLine({ label, amount, bold }: { label: string; amount: number; bold?: boolean }) {
+  return (
+    <div className={`flex items-center justify-between ${bold ? "font-semibold text-base" : ""}`}>
+      <span className="text-slate-700">{label}</span>
+      <span className="text-slate-900">${amount.toLocaleString()}</span>
+    </div>
+  );
 }
 
-function generateStandardizedCodes(data: ClaimFormData) {
-  // Simple keyword matching for demo purposes
-  const diagnosis = data.diagnosisDescription.toLowerCase();
-  const procedure = data.proceduresPerformed.toLowerCase();
-  const medications = data.medicationsGiven.toLowerCase();
+// AI Report Generation Logic
+function generateTechnicalReport(formData: SimpleClaimFormData): GeneratedClaimReport {
+  const problemLower = (formData.problemDescription + " " + formData.diagnosisInWords).toLowerCase();
+  const procedureLower = formData.proceduresDescription.toLowerCase();
+
+  // Intelligent code mapping based on description
+  const icd10Codes = [];
+  const cptCodes = [];
+  const rxNormCodes = [];
+
+  // ICD-10 Mapping Logic
+  if (problemLower.includes("knee") && (problemLower.includes("arthritis") || problemLower.includes("wear") || problemLower.includes("cartilage"))) {
+    icd10Codes.push({ code: "M17.11", description: "Unilateral primary osteoarthritis, right knee", confidence: 0.96 });
+  } else if (problemLower.includes("diabetes")) {
+    icd10Codes.push({ code: "E11.9", description: "Type 2 diabetes mellitus without complications", confidence: 0.94 });
+  } else {
+    icd10Codes.push({ code: "M25.50", description: "Pain in unspecified joint", confidence: 0.85 });
+  }
+
+  // CPT Mapping Logic
+  if (procedureLower.includes("knee") && (procedureLower.includes("replacement") || procedureLower.includes("arthroplasty"))) {
+    cptCodes.push({ code: "27447", description: "Total knee arthroplasty", confidence: 0.98 });
+  } else if (procedureLower.includes("hip") && procedureLower.includes("replacement")) {
+    cptCodes.push({ code: "27130", description: "Total hip arthroplasty", confidence: 0.97 });
+  } else {
+    cptCodes.push({ code: "99213", description: "Office or outpatient visit", confidence: 0.88 });
+  }
+
+  // RxNorm Mapping
+  if (formData.medicationsGiven) {
+    const medsLower = formData.medicationsGiven.toLowerCase();
+    if (medsLower.includes("pain")) {
+      rxNormCodes.push({ code: "1049621", description: "Oxycodone 5 MG Oral Tablet", confidence: 0.93 });
+    }
+    if (medsLower.includes("anti-inflammatory") || medsLower.includes("inflammation")) {
+      rxNormCodes.push({ code: "203221", description: "Celecoxib 200 MG Oral Capsule", confidence: 0.91 });
+    }
+    if (medsLower.includes("blood thinner") || medsLower.includes("clot")) {
+      rxNormCodes.push({ code: "854228", description: "Enoxaparin sodium 40 MG/0.4 ML Injection", confidence: 0.92 });
+    }
+  }
+
+  // Calculate billing breakdown
+  const totalAmount = parseFloat(formData.estimatedTotalCost) || 48000;
+  const roomCharges = Math.round(totalAmount * 0.18);
+  const procedureCharges = Math.round(totalAmount * 0.68);
+  const medicationCharges = Math.round(totalAmount * 0.08);
+  const labCharges = Math.round(totalAmount * 0.04);
+  const otherCharges = totalAmount - (roomCharges + procedureCharges + medicationCharges + labCharges);
+
+  const claimId = `CLM-${Date.now()}`;
 
   return {
-    icd10Codes: [
-      diagnosis.includes("knee") || diagnosis.includes("osteoarthritis")
-        ? { code: "M17.11", description: "Unilateral primary osteoarthritis, right knee", confidence: 0.96 }
-        : { code: "M25.50", description: "Pain in unspecified joint", confidence: 0.85 },
+    claimId,
+    technicalCodes: {
+      icd10Codes,
+      cptCodes,
+      rxNormCodes,
+    },
+    matchedPolicy: {
+      policyId: "POL-KNEE-042",
+      policyName: procedureLower.includes("knee") ? "Total Knee Arthroplasty Coverage" : "General Surgical Procedure Coverage",
+      coverageStatus: "COVERED",
+      requirementsMet: [
+        "Medical necessity documented",
+        "Diagnosis criteria satisfied",
+        "Conservative treatment attempted",
+        "Procedure medically appropriate",
+      ],
+    },
+    technicalDiagnosis: generateTechnicalDiagnosis(formData),
+    medicalNecessityJustification: generateMedicalNecessity(formData),
+    detailedBilling: {
+      roomCharges,
+      procedureCharges,
+      medicationCharges,
+      labCharges,
+      otherCharges,
+      totalAmount,
+    },
+    formalClaimLetter: generateFormalLetter(formData, claimId, totalAmount, icd10Codes, cptCodes),
+    supportingEvidence: [
+      "Clinical notes documenting patient's condition",
+      "Pre-operative assessment records",
+      "Imaging studies showing severity",
+      "Treatment history documentation",
+      "Post-operative care plan",
     ],
-    cptCodes: [
-      procedure.includes("knee") || procedure.includes("arthroplasty")
-        ? { code: "27447", description: "Total knee arthroplasty", confidence: 0.98 }
-        : { code: "99213", description: "Office visit", confidence: 0.90 },
-    ],
-    rxNormCodes: medications ? [
-      { code: "860975", description: "Metformin hydrochloride 500 MG Oral Tablet", confidence: 0.94 },
-    ] : [],
+    executiveSummary: `This claim is for ${formData.patientName}, a ${formData.patientAge}-year-old ${formData.patientGender.toLowerCase()} patient who presented with ${formData.chiefComplaint.toLowerCase()}. After comprehensive evaluation revealing ${formData.diagnosisInWords.toLowerCase()}, the patient underwent ${formData.proceduresDescription.toLowerCase()}. The procedure was medically necessary and appropriate, with all insurance policy requirements met. Total claim amount of $${totalAmount.toLocaleString()} includes all hospital services, procedure costs, medications, and associated care.`,
   };
 }
 
-function generateFormalLetter(data: ClaimFormData): string {
+function generateTechnicalDiagnosis(formData: SimpleClaimFormData): string {
+  return `Clinical presentation consistent with ${formData.diagnosisInWords}. Patient exhibited ${formData.symptomsDescription.toLowerCase()} with symptom duration of ${formData.howLongProblem.toLowerCase()}. Clinical examination and diagnostic imaging confirmed the diagnosis requiring surgical intervention.`;
+}
+
+function generateMedicalNecessity(formData: SimpleClaimFormData): string {
+  return `Medical necessity is established based on: (1) Documented diagnosis of ${formData.diagnosisInWords.toLowerCase()}, (2) Significant functional impairment as evidenced by ${formData.symptomsDescription.toLowerCase()}, (3) ${formData.treatmentDescription.toLowerCase()}, and (4) Clinical indication for surgical intervention. The proposed treatment represents the appropriate standard of care for this condition.`;
+}
+
+function generateFormalLetter(formData: SimpleClaimFormData, claimId: string, amount: number, icd10: any[], cpt: any[]): string {
   const today = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 
-  return `${data.hospitalName}
-${data.hospitalId}
+  return `CityCare Hospital
+Medical Claims Department
 ${today}
 
-${data.insuranceProvider}
-Claims Department
+${formData.insuranceCompany}
+Claims Processing Department
 
-Re: Insurance Claim for Patient ${data.patientName}
-Policy Number: ${data.policyNumber}
-Patient ID: ${data.patientId}
-Date of Service: ${data.admissionDate} to ${data.dischargeDate}
+RE: Insurance Claim Submission
+Claim ID: ${claimId}
+Patient: ${formData.patientName}, Age ${formData.patientAge}
+Policy Number: ${formData.policyNumber}
+Date of Service: ${formData.admissionDate} to ${formData.dischargeDate}
 
 Dear Claims Adjudicator,
 
-This letter serves as a formal claim submission for medical services provided to the above-referenced patient.
-
-PATIENT INFORMATION:
-Name: ${data.patientName}
-Date of Birth: ${data.dateOfBirth}
-Gender: ${data.gender}
-Insurance Policy: ${data.policyNumber}
+This letter serves as formal submission of an insurance claim for medical services rendered to the above-referenced patient.
 
 CLINICAL SUMMARY:
-Chief Complaint: ${data.chiefComplaint}
+The patient presented with ${formData.chiefComplaint.toLowerCase()}, with symptoms including ${formData.symptomsDescription.toLowerCase()}. Clinical evaluation revealed ${formData.diagnosisInWords.toLowerCase()}.
 
-Diagnosis: ${data.diagnosisDescription}
+TREATMENT PROVIDED:
+${formData.treatmentDescription}
 
-Treatment Provided: ${data.treatmentProvided}
+PROCEDURE PERFORMED:
+${formData.proceduresDescription}
 
-Procedures Performed: ${data.proceduresPerformed}
+The patient received care in our ${formData.departmentName} department under the supervision of ${formData.attendingDoctor}. Hospital stay duration was ${formData.lengthOfStay} days in a ${formData.roomCategory.toLowerCase()}.
 
-${data.medicationsGiven ? `Medications Administered: ${data.medicationsGiven}` : ""}
+DIAGNOSTIC CODES:
+${icd10.map(c => `${c.code} - ${c.description}`).join("\n")}
 
-The patient was treated in the ${data.department} department under the care of ${data.attendingPhysician}. ${data.roomType} accommodations were provided during the stay.
+PROCEDURE CODES:
+${cpt.map(c => `${c.code} - ${c.description}`).join("\n")}
 
-BILLING SUMMARY:
-Total Claim Amount: $${parseFloat(data.totalAmount || "0").toLocaleString()}
+TOTAL CLAIM AMOUNT: $${amount.toLocaleString()}
 
-The medical necessity for these services has been thoroughly documented. All treatments were provided in accordance with established clinical guidelines and standards of care. Supporting documentation, including clinical notes, diagnostic reports, and treatment records, is available upon request.
+Medical necessity for all services has been thoroughly documented. The treatment provided represents appropriate standard of care and is consistent with the patient's clinical presentation and diagnosis.
 
-We respectfully request timely processing of this claim in accordance with the policy terms and conditions.
+All supporting documentation, including clinical notes, diagnostic reports, and treatment records, is available upon request.
 
-Should you require any additional information or documentation, please contact our billing department.
+We respectfully request timely processing of this claim in accordance with policy terms and coverage provisions.
 
 Sincerely,
 
-${data.hospitalName}
-Medical Records Department`;
+CityCare Hospital
+Medical Claims Department`;
 }
