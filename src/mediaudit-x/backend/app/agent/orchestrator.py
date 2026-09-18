@@ -190,10 +190,12 @@ def _deterministic_tool_sweep(claim: dict) -> tuple[list[tuple[str, dict]], dict
         "cited_evidence": [],
     }
 
-    payer = claim.get("payer_name", "")
-    cpt = claim.get("cpt_code", "")
-    icd = claim.get("icd10_code", "")
-    patient_id = claim.get("patient_id", "")
+    # `or ""`, not a .get default: intake claims store these as explicit
+    # nulls, and Elasticsearch rejects a term query on null.
+    payer = claim.get("payer_name") or ""
+    cpt = claim.get("cpt_code") or ""
+    icd = claim.get("icd10_code") or ""
+    patient_id = claim.get("patient_id") or ""
     clinical_summary = _get_patient_clinical_summary(patient_id)
 
     events.append(("reasoning_step", {
@@ -394,7 +396,7 @@ async def adjudicate_claim(claim: dict):
         "tool calls."
     )
 
-    clinical_summary = _get_patient_clinical_summary(claim.get("patient_id", ""))
+    clinical_summary = _get_patient_clinical_summary(claim.get("patient_id") or "")
     messages = [
         {
             "role": "user",

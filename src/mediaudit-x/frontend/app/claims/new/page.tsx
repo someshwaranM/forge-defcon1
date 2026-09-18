@@ -73,8 +73,11 @@ export default function NewClaimPage() {
 
   function addFiles(list: FileList | null) {
     if (!list || list.length === 0) return;
+    // Copy now: the caller resets the input right after, which empties this
+    // live FileList before React may get round to running the updater.
+    const picked = Array.from(list);
     setError(null);
-    setFiles((prev) => [...prev, ...Array.from(list)]);
+    setFiles((prev) => [...prev, ...picked]);
   }
 
   async function handleSubmit(e: React.FormEvent) {

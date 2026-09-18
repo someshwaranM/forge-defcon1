@@ -52,6 +52,7 @@ export default function InsuranceReviewPage() {
   const [done, setDone] = useState<DoneEvent | null>(null);
   const [alerts, setAlerts] = useState<InteractionAlertData[]>([]);
   const [running, setRunning] = useState(false);
+  const [adjError, setAdjError] = useState<string | null>(null);
   const [checkedForExisting, setCheckedForExisting] = useState(false);
   const [tab, setTab] = useState<(typeof TABS)[number]>("Overview");
 
@@ -76,12 +77,22 @@ export default function InsuranceReviewPage() {
   async function runAdjudication() {
     setRunning(true);
     setAlerts([]);
+    setAdjError(null);
 
-    const response = await fetch(`${API_BASE_URL}/claims/${claimId}/adjudicate`, { method: "POST" });
-    if (!response.body) {
+    let response: Response;
+    try {
+      response = await fetch(`${API_BASE_URL}/claims/${claimId}/adjudicate`, { method: "POST" });
+    } catch {
+      setAdjError(`Could not reach the API at ${API_BASE_URL}. Is the backend running?`);
       setRunning(false);
       return;
     }
+    if (!response.ok || !response.body) {
+      setAdjError(`AI analysis failed to start (HTTP ${response.status}).`);
+      setRunning(false);
+      return;
+    }
+    let finished = false;
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
@@ -103,10 +114,15 @@ export default function InsuranceReviewPage() {
         if (parsed.event === "interaction_alert") {
           setAlerts((prev) => [...prev, data]);
         } else if (parsed.event === "done") {
+          finished = true;
           setDone(data);
+        } else if (parsed.event === "error") {
+          finished = true;
+          setAdjError(data.detail || "AI analysis failed.");
         }
       }
     }
+    if (!finished) setAdjError("AI analysis stopped before returning a result. Check the backend logs.");
     setRunning(false);
   }
 
@@ -169,6 +185,12 @@ export default function InsuranceReviewPage() {
           </div>
         </div>
       </div>
+
+      {adjError && (
+        <Alert type="error" title="AI analysis could not run">
+          {adjError}
+        </Alert>
+      )}
 
       {/* Quick Summary Card */}
       <div className="card p-4">
