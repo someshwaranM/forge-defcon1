@@ -9,6 +9,28 @@ is grounded in real Elasticsearch search results — hybrid BM25 + vector
 search with RRF, and ES|QL temporal queries — and cited back to its
 source, rather than left to LLM inference alone.
 
+## Screenshots
+
+**Login** — role-based sign-in (Hospital or Insurance).
+![Login](docs/screenshots/01-login.png)
+
+**Insurance reviewer dashboard** — claim counts, outcome breakdown, recent claims.
+![Dashboard](docs/screenshots/02-dashboard.png)
+
+**Claim review — Overview** — AI recommendation (matched policy, evidence
+sources, drug interactions, step-therapy check), advisory pending
+reviewer sign-off.
+![Claim overview](docs/screenshots/03-claim-overview.png)
+
+**Claim review — AI Claim Assistant** — reviewer asks a question about
+the claim and gets an answer grounded in the actual adjudication record
+(trajectory result, cited policy).
+![AI chat](docs/screenshots/04-ai-chat.png)
+
+**Claim review — Policy & Evidence** — the matched payer policy with its
+clinical indications, cited back to source.
+![Policy and evidence](docs/screenshots/05-policy-evidence.png)
+
 ## Core capabilities
 
 - **Document intake + OCR** (`pipeline/ingestion/` + `pipeline/ocr/`,
@@ -195,6 +217,23 @@ source, rather than left to LLM inference alone.
   baked in, in addition to `pip install -r requirements.txt`. The backend
   `Dockerfile` already does this (`apt-get install -y tesseract-ocr`) --
   see "Quickstart — Docker" below.
+
+## Future work
+
+- **Patient-facing decision letters in the patient's own language.**
+  `generated_letter` on `adjudication-results` is English-only today.
+  Sarvam's Text Translation API (22+ Indic languages) would translate the
+  generated letter before it's sent to the patient, alongside the English
+  original for the reviewer/audit record — a real accessibility gap for a
+  claims-denial notice, since a patient who can't read the reasoning has
+  no practical way to contest it.
+- **Multilingual AI chat assistant.** The claim-detail AI chat
+  (`routers/chat.py`, backed by Elastic Agent Builder with a Bedrock
+  fallback) only converses in English. Sarvam's Chat Completion or
+  Translation API could sit in front of/behind it so a hospital reviewer
+  or patient can ask questions in Hindi, Tamil, etc. and get answers
+  translated back, without changing the underlying Agent Builder tools or
+  the Bedrock tool loop.
 
 ## Quickstart — Docker (recommended)
 

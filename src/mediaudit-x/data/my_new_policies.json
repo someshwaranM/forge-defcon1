@@ -1,0 +1,35 @@
+[
+  {
+    "policy_id": "POL-CIGNA-MRI-BRAIN-01",
+    "payer_name": "Cigna",
+    "title": "MRI Brain Without Contrast Coverage Policy",
+    "cpt_codes": "70551",
+    "icd10_codes": "R51.9 G43.909",
+    "clinical_indications": "Covered for persistent headache unresponsive to at least 4 weeks of conservative management (analgesics, triptans, or preventive migraine therapy as appropriate), or when accompanied by a new focal neurological deficit, sudden severe (thunderclap) onset, or age over 50 with a new headache pattern.",
+    "contraindications": "Not covered for a first-presentation, uncomplicated headache without at least 4 weeks of documented conservative management, in the absence of red-flag neurological findings.",
+    "step_therapy_required": true,
+    "_source_note": "Hand-built for demo/testing purposes -- illustrative policy language, not transcribed from a real Cigna coverage document."
+  },
+  {
+    "policy_id": "POL-BCBS-SPINE-FUSION-01",
+    "payer_name": "Blue Cross Blue Shield",
+    "title": "Lumbar Spinal Fusion Coverage Policy",
+    "cpt_codes": "22633 22630",
+    "icd10_codes": "M43.16 M51.36",
+    "clinical_indications": "Covered for degenerative disc disease or spondylolisthesis with radiographic instability, after at least 6 months of documented conservative therapy (physical therapy, NSAIDs, and at least one epidural steroid injection) has failed to relieve symptoms.",
+    "contraindications": "Not covered for chronic low back pain without radiographic instability, or when fewer than 6 months of conservative therapy is documented.",
+    "step_therapy_required": true,
+    "_source_note": "Hand-built for demo/testing purposes -- illustrative policy language, not transcribed from a real BCBS coverage document."
+  },
+  {
+    "policy_id": "POL-AETNA-PT-BACK-01",
+    "payer_name": "Aetna",
+    "title": "Outpatient Physical Therapy for Chronic Low Back Pain",
+    "cpt_codes": "97110 97140",
+    "icd10_codes": "M54.50 M54.51",
+    "clinical_indications": "Covered for chronic low back pain with a documented functional limitation, up to 12 visits per episode, when ordered by a physician with a clear treatment goal and expected duration.",
+    "contraindications": "Not covered beyond 12 visits per episode without a documented re-evaluation showing continued functional improvement.",
+    "step_therapy_required": false,
+    "_source_note": "Hand-built for demo/testing purposes -- illustrative policy language, not transcribed from a real Aetna coverage document."
+  }
+]
