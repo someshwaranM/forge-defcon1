@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Clock, Play, FileText } from "lucide-react";
+import { ArrowLeft, Clock, Play, FileText, AlertCircle, CheckCircle } from "lucide-react";
 import Alert from "../../../components/ui/Alert";
 import AIRecommendationCard from "../../../components/claims/AIRecommendationCard";
 import ReviewerDecisionPanel from "../../../components/claims/ReviewerDecisionPanel";
@@ -152,26 +152,31 @@ export default function InsuranceReviewPage() {
       </div>
 
       {/* Claim Details */}
-      <div className="card p-5">
+      <div className="card p-6">
         <h2 className="mb-4 text-lg font-semibold text-slate-900">Claim Information</h2>
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          <div>
-            <span className="text-slate-500">Patient:</span>
+        <div className="grid grid-cols-2 gap-6 text-sm">
+          <div className="bg-slate-50 rounded-lg p-4">
+            <span className="text-xs font-medium text-slate-500 block mb-1">Patient</span>
             <div className="font-semibold text-slate-900">{claim.patient_id}</div>
           </div>
-          <div>
-            <span className="text-slate-500">Payer:</span>
+          <div className="bg-slate-50 rounded-lg p-4">
+            <span className="text-xs font-medium text-slate-500 block mb-1">Payer</span>
             <div className="font-semibold text-slate-900">{claim.payer_name}</div>
           </div>
-          <div>
-            <span className="text-slate-500">CPT / ICD-10:</span>
+          <div className="bg-slate-50 rounded-lg p-4">
+            <span className="text-xs font-medium text-slate-500 block mb-1">Procedure / Diagnosis Codes</span>
             <div className="font-semibold text-slate-900">
-              {claim.cpt_code} / {claim.icd10_code}
+              <span className="inline-block bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs mr-2">
+                CPT: {claim.cpt_code}
+              </span>
+              <span className="inline-block bg-purple-100 text-purple-700 px-2 py-0.5 rounded text-xs">
+                ICD-10: {claim.icd10_code}
+              </span>
             </div>
           </div>
-          <div>
-            <span className="text-slate-500">Claim Amount:</span>
-            <div className="font-semibold text-slate-900">${claim.claim_amount?.toLocaleString()}</div>
+          <div className="bg-emerald-50 rounded-lg p-4 border border-emerald-200">
+            <span className="text-xs font-medium text-emerald-600 block mb-1">Claim Amount</span>
+            <div className="text-xl font-bold text-emerald-700">${claim.claim_amount?.toLocaleString()}</div>
           </div>
         </div>
       </div>
@@ -200,17 +205,8 @@ export default function InsuranceReviewPage() {
       {done && (
         <>
           <div className="grid grid-cols-3 gap-5">
-            <div className="col-span-2">
-              <div className="card p-5">
-                <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-800">
-                  <FileText size={15} /> Generated Decision Letter
-                </h2>
-                <pre className="whitespace-pre-wrap rounded-lg bg-slate-50 p-4 text-xs leading-relaxed text-slate-700">
-                  {done.generated_letter}
-                </pre>
-              </div>
-            </div>
-            <div>
+            <div className="col-span-2 space-y-5">
+              {/* AI Recommendation Card */}
               <AIRecommendationCard
                 status={done.status}
                 matchedPolicy={done.matched_policy}
@@ -218,39 +214,165 @@ export default function InsuranceReviewPage() {
                 evidenceCount={done.cited_evidence?.length || 0}
                 interactionCount={alerts.length}
               />
+
+              {/* Generated Decision Letter */}
+              <div className="card p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
+                    <FileText size={20} className="text-blue-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-semibold text-slate-900">Generated Decision Letter</h2>
+                    <p className="text-xs text-slate-500">AI-generated based on policy and evidence</p>
+                  </div>
+                </div>
+                <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-lg p-5 border border-slate-200">
+                  <pre className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700 font-sans">
+                    {done.generated_letter}
+                  </pre>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column - Quick Stats */}
+            <div className="space-y-4">
+              {/* Evidence Summary */}
+              <div className="card p-5">
+                <h3 className="text-sm font-semibold text-slate-800 mb-3">Analysis Summary</h3>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-600">Evidence Found</span>
+                    <span className="text-sm font-bold text-blue-600">{done.cited_evidence?.length || 0}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-600">Drug Interactions</span>
+                    <span className="text-sm font-bold text-red-600">{alerts.length}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-600">Policy Matched</span>
+                    <span className="text-sm font-bold text-emerald-600">
+                      {done.matched_policy ? "Yes" : "No"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Status Badge */}
+              <div className={`card p-5 border-2 ${
+                done.status === "APPROVE" ? "border-emerald-200 bg-emerald-50" :
+                done.status === "DENY" ? "border-red-200 bg-red-50" :
+                "border-amber-200 bg-amber-50"
+              }`}>
+                <div className="text-xs font-medium text-slate-600 mb-2">AI Recommendation</div>
+                <div className={`text-lg font-bold ${
+                  done.status === "APPROVE" ? "text-emerald-700" :
+                  done.status === "DENY" ? "text-red-700" :
+                  "text-amber-700"
+                }`}>
+                  {done.status}
+                </div>
+              </div>
             </div>
           </div>
 
+          {/* Drug Interaction Alerts */}
           {alerts.length > 0 && (
-            <Alert type="error" title="Drug Interaction Findings">
-              {alerts.map((a, i) => (
-                <div key={i} className="mt-1 text-sm">
-                  <strong>{a.severity}:</strong> {a.drug_a} + {a.drug_b} — {a.mechanism}
+            <div className="card p-6 border-2 border-red-200 bg-red-50">
+              <div className="flex items-start gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                  <AlertCircle size={20} className="text-red-600" />
                 </div>
-              ))}
-            </Alert>
-          )}
-
-          {done.matched_policy && (
-            <div className="card p-5">
-              <h2 className="mb-3 text-lg font-semibold text-slate-900">Matched Policy</h2>
-              <div className="mb-4 rounded-lg border border-slate-100 p-4 text-sm">
-                <div className="font-medium text-slate-800">
-                  {done.matched_policy.policy_id} — {done.matched_policy.title}
+                <div>
+                  <h3 className="text-base font-semibold text-red-900">Drug Interaction Findings</h3>
+                  <p className="text-xs text-red-700 mt-1">{alerts.length} potential interaction(s) detected</p>
                 </div>
-                <div className="mt-1 text-slate-500">{done.matched_policy.payer_name}</div>
-                <div className="mt-2 text-slate-600">{done.matched_policy.clinical_indications}</div>
-                {done.matched_policy.step_therapy_required && (
-                  <span className="badge badge-pending mt-2">Step therapy required</span>
-                )}
               </div>
-              {policyEvidence.length > 0 && <CitationPanel evidence={policyEvidence} />}
+              <div className="space-y-3">
+                {alerts.map((a, i) => (
+                  <div key={i} className="bg-white rounded-lg p-4 border border-red-200">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                        a.severity === "MAJOR" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
+                      }`}>
+                        {a.severity}
+                      </span>
+                    </div>
+                    <div className="text-sm text-slate-800 mb-1">
+                      <strong>{a.drug_a}</strong> + <strong>{a.drug_b}</strong>
+                    </div>
+                    <div className="text-xs text-slate-600">{a.mechanism}</div>
+                    {a.fda_citation && (
+                      <div className="text-xs text-slate-500 mt-2">
+                        <span className="font-medium">Source:</span> {a.fda_citation}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
+          {/* Matched Policy */}
+          {done.matched_policy && (
+            <div className="card p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center">
+                  <CheckCircle size={20} className="text-emerald-600" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold text-slate-900">Matched Policy</h2>
+                  <p className="text-xs text-slate-500">Coverage policy identified for this claim</p>
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-lg border-2 border-emerald-200 p-5 mb-4">
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <div className="text-sm font-bold text-slate-900 mb-1">
+                      {done.matched_policy.title}
+                    </div>
+                    <div className="text-xs text-slate-600">
+                      <span className="inline-block bg-white px-2 py-1 rounded font-mono text-xs">
+                        {done.matched_policy.policy_id}
+                      </span>
+                    </div>
+                  </div>
+                  {done.matched_policy.step_therapy_required && (
+                    <span className="px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-xs font-semibold">
+                      Step Therapy Required
+                    </span>
+                  )}
+                </div>
+                <div className="text-xs text-slate-600 mb-2">
+                  <strong className="text-slate-700">Payer:</strong> {done.matched_policy.payer_name}
+                </div>
+                <div className="text-sm text-slate-700 leading-relaxed bg-white/50 rounded p-3 border border-emerald-100">
+                  <strong className="text-emerald-700 text-xs block mb-1">Clinical Indications:</strong>
+                  {done.matched_policy.clinical_indications}
+                </div>
+              </div>
+
+              {policyEvidence.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-800 mb-3">Supporting Evidence</h3>
+                  <CitationPanel evidence={policyEvidence} />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Clinical Evidence */}
           {otherEvidence.length > 0 && (
-            <div className="card p-5">
-              <h2 className="mb-3 text-lg font-semibold text-slate-900">Clinical Evidence</h2>
+            <div className="card p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
+                  <FileText size={20} className="text-blue-600" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold text-slate-900">Clinical Evidence</h2>
+                  <p className="text-xs text-slate-500">{otherEvidence.length} evidence item(s) found</p>
+                </div>
+              </div>
               <CitationPanel evidence={otherEvidence} />
             </div>
           )}
@@ -259,6 +381,8 @@ export default function InsuranceReviewPage() {
           <ReviewerDecisionPanel
             claimId={claim.claim_id}
             aiRecommendation={done.status}
+            currentStatus={claim.status}
+            reviewerComment={claim.reviewer_comment}
             onDecisionSubmit={async (decision, comment) => {
               const res = await fetch(`${API_BASE_URL}/claims/${claim.claim_id}/decision`, {
                 method: "POST",
@@ -273,7 +397,7 @@ export default function InsuranceReviewPage() {
               }
               const result = await res.json();
               setDone((prev) => (prev ? { ...prev, status: result.status } : prev));
-              setClaim((prev: any) => (prev ? { ...prev, status: result.status } : prev));
+              setClaim((prev: any) => (prev ? { ...prev, status: result.status, reviewer_comment: comment } : prev));
             }}
           />
         </>
