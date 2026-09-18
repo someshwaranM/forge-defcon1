@@ -31,6 +31,7 @@ import AIRecommendationCard from "../../components/claims/AIRecommendationCard";
 import ClaimStatusTimeline from "../../components/claims/ClaimStatusTimeline";
 import ReviewerDecisionPanel from "../../components/claims/ReviewerDecisionPanel";
 import AIAgentChat from "../../components/claims/AIAgentChat";
+import ClaimAuditTrail from "../../components/claims/ClaimAuditTrail";
 import { DemoDataManager, type DemoInsuranceClaim } from "../../lib/completeDemoData";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
@@ -365,24 +366,7 @@ export default function ClaimDetailPage() {
         </div>
       )}
 
-      {tab === "Audit Trail" && (
-        <div className="card p-5">
-          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-800">
-            <LinkIcon size={15} /> Hash-Chained Ledger Entry
-          </h2>
-          {done?.ledger_entry ? (
-            <div className="space-y-1.5 font-mono text-xs text-slate-600">
-              <div>ledger_id: {done.ledger_entry.ledger_id}</div>
-              <div>sequence_number: {done.ledger_entry.sequence_number}</div>
-              <div>record_hash: {done.ledger_entry.record_hash}</div>
-              <div>prev_hash: {done.ledger_entry.prev_hash}</div>
-              <div>timestamp: {done.ledger_entry.timestamp}</div>
-            </div>
-          ) : (
-            <p className="text-sm text-slate-400">Run adjudication to write a new hash-chained entry for this claim.</p>
-          )}
-        </div>
-      )}
+      {tab === "Audit Trail" && <ClaimAuditTrail claimId={claim.claim_id} />}
     </div>
   );
 }
