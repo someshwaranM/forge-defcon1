@@ -141,7 +141,7 @@ export default function ClaimsPage() {
                   <td className="px-4 py-3 text-slate-500 text-sm">{claim.submitted_date || 'N/A'}</td>
                   <td className="px-4 py-3 text-right">
                     <Link
-                      href={role === "hospital" ? `/hospital/claims/${claim.claim_id}` : `/claims/${claim.claim_id}`}
+                      href={role === "hospital" ? `/hospital/claims/${claim.claim_id}` : `/insurance/review/${claim.claim_id}`}
                       className="text-xs font-medium text-blue-600 hover:underline"
                     >
                       View
