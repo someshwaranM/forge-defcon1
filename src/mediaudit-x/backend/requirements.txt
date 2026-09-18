@@ -13,3 +13,5 @@ pdfplumber==0.11.4
 Pillow>=9.1  # image checks in app/pipeline/ingestion; also a pdfplumber dependency
 boto3==1.43.96
 python-multipart==0.0.32
+pytesseract==0.3.13
+Pillow==12.3.0

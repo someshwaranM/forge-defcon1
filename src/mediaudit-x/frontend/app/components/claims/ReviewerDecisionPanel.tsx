@@ -9,7 +9,7 @@ import Alert from "../ui/Alert";
 interface ReviewerDecisionPanelProps {
   claimId: string;
   aiRecommendation?: string;
-  onDecisionSubmit?: (decision: "APPROVED" | "DENIED" | "REQUEST_INFO", comment: string) => void;
+  onDecisionSubmit?: (decision: "APPROVED" | "DENIED" | "REQUEST_INFO", comment: string) => void | Promise<void>;
 }
 
 export default function ReviewerDecisionPanel({
@@ -27,17 +27,19 @@ export default function ReviewerDecisionPanel({
     setShowConfirm(true);
   };
 
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
   const handleConfirm = async () => {
     if (!selectedDecision || !comment.trim()) return;
 
     setSubmitting(true);
+    setSubmitError(null);
     try {
-      // Call the API (mock for now)
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      onDecisionSubmit?.(selectedDecision, comment);
+      await onDecisionSubmit?.(selectedDecision, comment);
       setShowConfirm(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to submit decision", error);
+      setSubmitError(error?.message || "Failed to submit decision. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -152,6 +154,12 @@ export default function ReviewerDecisionPanel({
           <Alert type={selectedDecision === "APPROVED" ? "success" : selectedDecision === "DENIED" ? "error" : "info"}>
             You are about to <strong>{selectedDecision?.toLowerCase()}</strong> this claim.
           </Alert>
+
+          {submitError && (
+            <Alert type="error" title="Submission failed">
+              {submitError}
+            </Alert>
+          )}
 
           <div>
             <div className="text-sm font-medium text-slate-700 mb-1">Claim ID:</div>

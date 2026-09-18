@@ -11,6 +11,18 @@ source, rather than left to LLM inference alone.
 
 ## Core capabilities
 
+- **Document intake + OCR** (`pipeline/ingestion/` + `pipeline/ocr/`,
+  see `INGESTION.md` and `OCR.md`) — a hospital uploads PDFs/images against a claim;
+  each file is validated (magic-byte content sniffing, size/page/pixel
+  limits, duplicate detection), stored, and registered in `claim-documents`
+  with `ocr_status: PENDING`. `POST /claims/{claim_id}/ocr` then extracts
+  every PENDING document's text (pdfplumber's embedded text layer first,
+  Tesseract OCR for scanned pages and images -- AWS Textract is spec'd as
+  an alternative engine but not implemented; `ocr_provider` in
+  `config.py` selects between them) and writes offset-addressable chunks
+  to `document-chunks` (with embeddings, ready for the same RRF hybrid
+  search pattern policy matching uses) so every extracted fact can cite
+  back to `(doc_id, page, char_start, char_end)`.
 - **Clinical trajectory search** (`trajectory_tool.py`) — a real ES|QL
   bi-temporal query (with a DSL aggregation fallback) that verifies
   step-therapy timelines against actual longitudinal patient history,
@@ -85,6 +97,38 @@ source, rather than left to LLM inference alone.
 
 ## Known limitations
 
+- **On this project's real Elastic Cloud Serverless cluster, `dense_vector`
+  fields (`policy_vector`, `notes_vector`, `document-chunks.text_vector`)
+  never come back in `_source` — not via `GET`, not via `_search` hits —
+  even though indexing reports success.** Verified this is not data loss:
+  a direct `knn` query against a freshly indexed vector field ranked
+  three test documents by real similarity (1.0 / 0.79 / 0.5), so the
+  vectors are genuinely indexed and searchable; Elasticsearch Serverless
+  just doesn't reconstruct `dense_vector` into synthetic `_source`,
+  reproduced even with `index: false` (no quantization at all), so it's
+  not specific to the `bbq_disk` index_options either. No code in this
+  repo reads a vector value back out of a search hit (`policy_matcher_tool.py`
+  only ever uses `policy_vector` as a `knn` query's field name), so this
+  has no functional impact on hybrid search today — but don't add code
+  that expects to read a stored vector back from `_source` on this
+  cluster, and don't mistake a missing `policy_vector` key in a fetched
+  document for evidence that embedding backfill didn't run.
+- **Two pre-existing test failures on this real cluster, unrelated to the
+  OCR work above, not yet investigated or fixed:**
+  - `test_resolve_medication_to_rxnorm` expects RXCUI `6960` for
+    "Toradol" but the cluster returns `35827` — exactly the kind of
+    hand-typed-RXCUI mismatch this repo's golden rule exists to catch;
+    needs someone to check `data/sample/sample_drug_interactions.json`
+    against a live RxNav lookup for Toradol before trusting either number.
+  - `test_audit_ledger_detects_tampering` fails because the ledger already
+    has 6 entries under the hardcoded claim_id `CLM-TEST-TAMPER` (the test
+    only appends 3), including one with a literal `record_hash: "TAMPERED"`
+    left over from an earlier manual tampering-detection experiment. The
+    chain-break `verify_chain` reports is real and correct given that
+    history — the test itself needs a unique claim_id per run (or a
+    teardown step) rather than reusing a fixed id against a shared,
+    append-only, real cluster. Left as-is rather than deleting ledger
+    entries unilaterally.
 - **Policy matcher's payer-name filter is exact-match.** The two real
   Medicare policies are indexed with
   `payer_name: "Medicare (CMS Local Coverage Determination)"`; most
@@ -112,6 +156,25 @@ source, rather than left to LLM inference alone.
 - **Elastic Agent Builder vs. the current hand-rolled Claude loop** is
   still undecided.
 - **No Elastic webhook/email action wired up yet.**
+- **OCR needs the Tesseract binary installed separately — it is not in
+  requirements.txt and cannot be, since it isn't a Python package.**
+  `pytesseract` (in requirements.txt) is only a wrapper that shells out to
+  a `tesseract` executable. `pip install -r requirements.txt` alone will
+  not give you working OCR on scanned pages/images:
+  - Windows: `winget install UB-Mannheim.TesseractOCR`
+  - macOS: `brew install tesseract`
+  - Linux: `apt-get install tesseract-ocr`
+
+  If it's missing, nothing crashes — `app/ocr/extract.py` degrades to
+  `engine: "failed"` with empty text rather than guessing — but scanned
+  documents/images will silently produce no extracted text until it's
+  installed. This also applies to wherever the backend eventually gets
+  deployed (a container image, a VM, etc.): Elasticsearch Serverless is
+  only the search/data layer and never runs this Python app, so whatever
+  environment does run it needs the same OS-level `tesseract-ocr` package
+  baked in, in addition to `pip install -r requirements.txt`. The backend
+  `Dockerfile` already does this (`apt-get install -y tesseract-ocr`) --
+  see "Quickstart — Docker" below.
 
 ## Quickstart — Docker (recommended)
 
@@ -158,6 +221,12 @@ pip install -r requirements.txt
 cp .env.example .env              # fill in Elastic + AWS/Anthropic credentials
 ```
 
+Also install the Tesseract OCR binary separately (needed for scanned
+documents/images — see "Known limitations" below for why `pip install`
+alone doesn't cover this): `winget install UB-Mannheim.TesseractOCR`
+(Windows), `brew install tesseract` (macOS), or `apt-get install
+tesseract-ocr` (Linux).
+
 ### 2. Create indices
 
 ```bash
@@ -189,7 +258,10 @@ API docs: http://localhost:8000/docs
 cd backend && python -m pytest tests/ -v
 ```
 
-Requires steps 2-3 to have run first against the same cluster.
+Requires steps 2-3 to have run first against the same cluster. (To run
+the backend in Docker instead of this local venv, see "Quickstart —
+Docker" above -- `docker-setup.sh` covers the equivalent of steps 2-3
+automatically.)
 
 ### 6. Frontend
 
@@ -208,13 +280,17 @@ new claim, optionally attaching supporting documents.
 
 ```
 backend/app/
-  routers/       FastAPI endpoints (claims, adjudication, patients)
+  routers/       FastAPI endpoints (claims, intake, ocr, adjudication, patients)
+  pipeline/
+    ingestion/    document upload -> checks -> storage -> claim-files/claim-documents (see INGESTION.md)
+    ocr/          claim-documents (PENDING) -> extract + chunk -> document-pages/document-chunks
   agent/          orchestrator.py — the agent loop
   tools/          trajectory / policy matcher / drug interaction / audit ledger
   actuators/      letter + FHIR ClaimResponse generation
   embeddings/     embed.py — vector embedding function
-  ingestion/      one script per data source
-  indices/        Elasticsearch index mappings
+  ingestion/      one script per seed data source (data/sample, CMS LCDs, Synthea) -- not to be
+                  confused with pipeline/ingestion/, the live document-upload stage above
+  indices/        Elasticsearch index mappings + names.py constants
 frontend/app/      Next.js dashboard, claim detail, new-claim form
 data/               sample/ and synthea_samples/ fixture data
 eval/               benchmark harness (skeleton)

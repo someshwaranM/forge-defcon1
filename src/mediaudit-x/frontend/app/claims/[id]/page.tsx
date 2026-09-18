@@ -11,7 +11,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useRole } from "../../contexts/RoleContext";
 import {
@@ -34,7 +34,7 @@ import AIAgentChat from "../../components/claims/AIAgentChat";
 import { DemoDataManager, type DemoInsuranceClaim } from "../../lib/completeDemoData";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
-const USE_DEMO_DATA = false; // Set to false when backend is available
+const USE_DEMO_DATA = false; // wired to the real backend API
 
 type ReasoningStep = { step: string; detail: string };
 type InteractionAlertData = {
@@ -70,16 +70,15 @@ function parseSSEEvent(chunk: string): { event: string; data: string } | null {
 
 export default function ClaimDetailPage() {
   const params = useParams();
-  const router = useRouter();
   const { role } = useRole();
   const claimId = params.id as string;
 
-  // Block hospital from accessing insurance adjudication page
-  useEffect(() => {
-    if (role === "hospital") {
-      router.push("/claims");
-    }
-  }, [role, router]);
+  // Hospital users can view the claim (read-only) but can't trigger
+  // adjudication themselves -- see the role-gated "Run Adjudication"
+  // button below. Previously this redirected hospital users straight
+  // back to /claims, which is why the "View" link on the dashboard and
+  // claims list appeared to do nothing for that role.
+  const canAdjudicate = role !== "hospital";
 
   const [claim, setClaim] = useState<any>(null);
   const [tab, setTab] = useState<(typeof TABS)[number]>("Overview");
@@ -210,16 +209,18 @@ export default function ClaimDetailPage() {
           <h1 className="text-2xl font-semibold text-slate-900">Claim {claim.claim_id}</h1>
           <StatusBadge status={done?.status || claim.status} />
         </div>
-        <button
-          onClick={runAdjudication}
-          disabled={running}
-          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white ${
-            running ? "cursor-default bg-slate-400" : "bg-blue-600 hover:bg-blue-700"
-          }`}
-        >
-          <Play size={15} />
-          {running ? "Adjudicating..." : "Run Adjudication"}
-        </button>
+        {canAdjudicate && (
+          <button
+            onClick={runAdjudication}
+            disabled={running}
+            className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white ${
+              running ? "cursor-default bg-slate-400" : "bg-blue-600 hover:bg-blue-700"
+            }`}
+          >
+            <Play size={15} />
+            {running ? "Adjudicating..." : "Run Adjudication"}
+          </button>
+        )}
       </div>
 
       <div className="card grid grid-cols-5 gap-4 p-4 text-sm">
@@ -288,13 +289,27 @@ export default function ClaimDetailPage() {
           </div>
 
           {/* Reviewer Decision Panel */}
-          {done && (
+          {done && canAdjudicate && (
             <ReviewerDecisionPanel
               claimId={claim.claim_id}
               aiRecommendation={done.status}
-              onDecisionSubmit={(decision, comment) => {
-                console.log("Decision submitted:", decision, comment);
-                // TODO: Implement API call to submit decision
+              onDecisionSubmit={async (decision, comment) => {
+                const res = await fetch(`${API_BASE_URL}/claims/${claim.claim_id}/decision`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    decision: decision === "APPROVED" ? "APPROVE" : decision === "DENIED" ? "DENY" : "REQUEST_INFO",
+                    reviewer_comment: comment,
+                  }),
+                });
+                if (!res.ok) {
+                  throw new Error(`Failed to submit decision (${res.status})`);
+                }
+                const result = await res.json();
+                // Reflect the human reviewer's decision immediately -- it
+                // supersedes the AI's own recommendation for this claim.
+                setDone((prev) => (prev ? { ...prev, status: result.status } : prev));
+                setClaim((prev: any) => (prev ? { ...prev, status: result.status } : prev));
               }}
             />
           )}

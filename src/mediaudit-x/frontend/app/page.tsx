@@ -28,16 +28,31 @@ type Claim = {
 export default function HomePage() {
   const [claims, setClaims] = useState<Claim[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const { role, userName } = useRole();
 
   useEffect(() => {
     fetch(`${API_BASE_URL}/claims?limit=200`)
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error(`API returned ${res.status}`);
+        return res.json();
+      })
       .then((data) => {
         setClaims(data);
+        setFetchError(null);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch((err) => {
+        // Distinguish "backend unreachable / CORS / 5xx" from "the
+        // index is genuinely empty" -- these previously looked
+        // identical (both rendered the empty "No claims found" state),
+        // which made a network/CORS failure indistinguishable from an
+        // empty insurance-claims index.
+        setFetchError(
+          `Could not load claims from ${API_BASE_URL} (${err.message}). Is the backend running, and does its CORS allow_origins include this page's exact origin (${typeof window !== "undefined" ? window.location.origin : "?"})?`
+        );
+        setLoading(false);
+      });
   }, []);
 
   const total = claims.length;
@@ -88,6 +103,8 @@ export default function HomePage() {
           </div>
           {loading ? (
             <p className="py-8 text-center text-sm text-slate-400">Loading claims...</p>
+          ) : fetchError ? (
+            <p className="py-8 text-center text-sm text-red-500">{fetchError}</p>
           ) : claims.length === 0 ? (
             <p className="py-8 text-center text-sm text-slate-400">
               No claims found. Run <code className="rounded bg-slate-100 px-1">python -m app.ingestion.load_sample_data</code> to load sample fixtures.
