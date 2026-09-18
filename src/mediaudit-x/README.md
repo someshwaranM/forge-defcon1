@@ -85,6 +85,38 @@ source, rather than left to LLM inference alone.
 
 ## Known limitations
 
+- **On this project's real Elastic Cloud Serverless cluster, `dense_vector`
+  fields (`policy_vector`, `notes_vector`, `document-chunks.text_vector`)
+  never come back in `_source` — not via `GET`, not via `_search` hits —
+  even though indexing reports success.** Verified this is not data loss:
+  a direct `knn` query against a freshly indexed vector field ranked
+  three test documents by real similarity (1.0 / 0.79 / 0.5), so the
+  vectors are genuinely indexed and searchable; Elasticsearch Serverless
+  just doesn't reconstruct `dense_vector` into synthetic `_source`,
+  reproduced even with `index: false` (no quantization at all), so it's
+  not specific to the `bbq_disk` index_options either. No code in this
+  repo reads a vector value back out of a search hit (`policy_matcher_tool.py`
+  only ever uses `policy_vector` as a `knn` query's field name), so this
+  has no functional impact on hybrid search today — but don't add code
+  that expects to read a stored vector back from `_source` on this
+  cluster, and don't mistake a missing `policy_vector` key in a fetched
+  document for evidence that embedding backfill didn't run.
+- **Two pre-existing test failures on this real cluster, unrelated to the
+  OCR work above, not yet investigated or fixed:**
+  - `test_resolve_medication_to_rxnorm` expects RXCUI `6960` for
+    "Toradol" but the cluster returns `35827` — exactly the kind of
+    hand-typed-RXCUI mismatch this repo's golden rule exists to catch;
+    needs someone to check `data/sample/sample_drug_interactions.json`
+    against a live RxNav lookup for Toradol before trusting either number.
+  - `test_audit_ledger_detects_tampering` fails because the ledger already
+    has 6 entries under the hardcoded claim_id `CLM-TEST-TAMPER` (the test
+    only appends 3), including one with a literal `record_hash: "TAMPERED"`
+    left over from an earlier manual tampering-detection experiment. The
+    chain-break `verify_chain` reports is real and correct given that
+    history — the test itself needs a unique claim_id per run (or a
+    teardown step) rather than reusing a fixed id against a shared,
+    append-only, real cluster. Left as-is rather than deleting ledger
+    entries unilaterally.
 - **Policy matcher's payer-name filter is exact-match.** The two real
   Medicare policies are indexed with
   `payer_name: "Medicare (CMS Local Coverage Determination)"`; most
