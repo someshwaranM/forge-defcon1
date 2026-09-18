@@ -17,12 +17,15 @@ export default function RootLayout({
   }, []);
 
   return (
-    <html lang="en">
+    // suppressHydrationWarning: browser extensions (e.g. Grammarly) add
+    // attributes to <html>/<body> before React loads, which otherwise
+    // triggers a hydration error.
+    <html lang="en" suppressHydrationWarning>
       <head>
         <title>MediAudit-X</title>
         <meta name="description" content="Clinical Claim Auditor & Temporal Drug-Interaction Engine" />
       </head>
-      <body>
+      <body suppressHydrationWarning>
         <RoleProvider>
           <AppShell>{children}</AppShell>
         </RoleProvider>
