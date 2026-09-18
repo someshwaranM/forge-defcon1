@@ -36,7 +36,11 @@ def _strip_provenance_fields(doc: dict) -> dict:
 def _backfill_vector(index: str, doc: dict) -> dict:
     if index == "fhir-clinical-ehr":
         text = " ".join(filter(None, [doc.get("code_display"), doc.get("clinician_notes")]))
-        doc["notes_vector"] = embed_text(text)
+        vector = embed_text(text)
+        # dot_product fields reject the all-zero vector embed_text returns
+        # for empty text; leave the field out for those docs instead.
+        if any(vector):
+            doc["notes_vector"] = vector
     return doc
 
 

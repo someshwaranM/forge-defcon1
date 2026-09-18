@@ -113,7 +113,26 @@ source, rather than left to LLM inference alone.
   still undecided.
 - **No Elastic webhook/email action wired up yet.**
 
-## Quickstart — running locally
+## Quickstart — Docker (recommended)
+
+Needs Docker Desktop (Compose 2.24+). Runs Elasticsearch, the backend and
+the frontend, and loads the sample data on first start.
+
+```bash
+cd src/mediaudit-x
+docker compose up --build        # first run; later runs: docker compose up
+```
+
+- UI: http://localhost:3000 · API docs: http://localhost:8000/docs
+- Stop: `Ctrl+C`, or `docker compose down` (add `-v` to wipe the data)
+- Port already in use? `ES_PORT=9201 docker compose up` (also
+  `BACKEND_PORT`, `FRONTEND_PORT`)
+- AWS / Anthropic keys: put them in `backend/.env`; the stack always uses
+  its own Elasticsearch container
+- Code in `backend/app` and `frontend/app` hot-reloads; rebuild with
+  `--build` after changing `requirements.txt` or `package.json`
+
+## Quickstart — running locally without Docker
 
 ### 1. Backend
 
