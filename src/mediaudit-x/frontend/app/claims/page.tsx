@@ -18,6 +18,7 @@ type Claim = {
   cpt_code: string;
   claim_amount: number;
   status: string;
+  ai_recommendation?: { status: string };
 };
 
 const FILTERS = ["All", "PENDING", "APPROVED", "DENIED"] as const;
@@ -135,7 +136,7 @@ export default function ClaimsPage() {
                   <td className="px-4 py-3 text-slate-500">{claim.payer_name}</td>
                   <td className="px-4 py-3 text-slate-500">{claim.cpt_code}</td>
                   <td className="px-4 py-3">
-                    <StatusBadge status={claim.status} />
+                    <StatusBadge status={claim.status} aiRecommendation={claim.ai_recommendation?.status} />
                   </td>
                   <td className="px-4 py-3 text-slate-700">${claim.claim_amount?.toLocaleString()}</td>
                   <td className="px-4 py-3 text-slate-500 text-sm">{claim.submitted_date || 'N/A'}</td>

@@ -235,7 +235,7 @@ export default function ReviewQueuePage() {
                   <td className="px-4 py-3 text-slate-500">{claim.procedure_name || claim.cpt_code}</td>
                   <td className="px-4 py-3 text-slate-700">${claim.claim_amount?.toLocaleString()}</td>
                   <td className="px-4 py-3">
-                    <AIRecommendationBadge recommendation={claim.ai_recommendation} />
+                    <AIRecommendationBadge recommendation={claim.ai_recommendation?.status || claim.ai_recommendation} />
                   </td>
                   <td className="px-4 py-3">
                     <StatusBadge status={claim.status} />

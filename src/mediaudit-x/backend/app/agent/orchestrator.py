@@ -619,35 +619,34 @@ async def adjudicate_claim(claim: dict):
         "detail": f"Ledger entry {ledger_entry['ledger_id']} written (seq {ledger_entry['sequence_number']}, hash {ledger_entry['record_hash'][:12]}...)",
     }
 
-    # FIXED (18 Sept): this function used to only write adjudication-results
-    # and audit-ledger, never the claim's own `status` field in
-    # insurance-claims -- so the decision only ever existed in the SSE
-    # response the frontend happened to be holding in memory at that
-    # moment. Refreshing the page, or reopening the claim later, showed
-    # the original PENDING status forever, as if adjudication had never
-    # run. update_by_query (rather than an es.get+es.index round trip) so
-    # this doesn't need to know the document's internal ES _id -- claims
-    # are indexed without an explicit id (see routers/claims.py), only
-    # queryable/updatable by the claim_id term.
-    #
-    # index=ALL_CLAIMS (not just insurance-claims): claims created via
-    # upload intake live in claim-files, not insurance-claims -- targeting
-    # only the latter meant an uploaded claim's status silently never
-    # updated after adjudication. update_by_query across both indices only
-    # touches whichever one actually has a matching claim_id.
+    # The AI verdict is a recommendation, not the final status. The claim
+    # stays PENDING until a human reviewer countersigns via POST
+    # /claims/{id}/decision. We store the recommendation on the claim
+    # record so the frontend can show "AI: APPROVED" etc. as a tag.
+    ai_recommendation = {
+        "status": status,
+        "adjudication_id": adjudication_id,
+        "decided_at": adjudication_doc["decided_at"],
+    }
     try:
         update_result = es.update_by_query(
             index=ALL_CLAIMS,
             query={"term": {"claim_id": claim.get("claim_id", "")}},
-            script={"source": "ctx._source.status = params.status", "params": {"status": status}},
+            script={
+                "source": "ctx._source.ai_recommendation = params.rec",
+                "params": {"rec": ai_recommendation},
+            },
             refresh=True,
         )
         yield "reasoning_step", {
-            "step": "claim_status_updated",
-            "detail": f"Claim status set to {status} ({update_result.get('updated', 0)} document(s) updated).",
+            "step": "ai_recommendation_saved",
+            "detail": (
+                f"AI recommends {status}. Claim stays PENDING until a human reviewer decides "
+                f"({update_result.get('updated', 0)} document(s) updated)."
+            ),
         }
     except Exception as e:  # noqa: BLE001
-        yield "reasoning_step", {"step": "write_error", "detail": f"Could not update claim status: {e}"}
+        yield "reasoning_step", {"step": "write_error", "detail": f"Could not save AI recommendation: {e}"}
 
     yield "done", {
         "status": status,

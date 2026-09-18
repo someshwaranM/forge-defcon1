@@ -208,7 +208,7 @@ export default function ClaimDetailPage() {
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-semibold text-slate-900">Claim {claim.claim_id}</h1>
-          <StatusBadge status={done?.status || claim.status} />
+          <StatusBadge status={claim.status} aiRecommendation={claim.ai_recommendation?.status || done?.status} />
         </div>
         {canAdjudicate && (
           <button
