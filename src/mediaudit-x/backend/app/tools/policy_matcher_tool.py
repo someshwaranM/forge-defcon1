@@ -12,6 +12,49 @@ from app.es_client import get_es_client
 from app.embeddings.embed import embed_text
 
 
+def _rrf_search(es, query_text: str, query_vector: list, payer_filter: dict | None, size: int = 3) -> dict:
+    bm25_bool: dict = {
+        "should": [
+            {
+                "multi_match": {
+                    "query": query_text,
+                    "fields": [
+                        "cpt_codes^4",
+                        "icd10_codes^3",
+                        "clinical_indications^2",
+                        "title",
+                    ],
+                    "type": "best_fields",
+                }
+            },
+        ],
+    }
+    knn_query: dict = {
+        "field": "policy_vector",
+        "query_vector": query_vector,
+        "k": 10,
+        "num_candidates": 50,
+    }
+    if payer_filter:
+        bm25_bool["filter"] = [payer_filter]
+        knn_query["filter"] = payer_filter
+
+    return es.search(
+        index="medical-policies",
+        retriever={
+            "rrf": {
+                "retrievers": [
+                    {"standard": {"query": {"bool": bm25_bool}}},
+                    {"standard": {"query": {"knn": knn_query}}},
+                ],
+                "rank_window_size": 20,
+                "rank_constant": 60,
+            }
+        },
+        size=size,
+    ).body
+
+
 def match_payer_coverage_policy(
     payer: str,
     cpt_code: str,
@@ -19,59 +62,43 @@ def match_payer_coverage_policy(
     clinical_summary: str,
 ) -> dict:
     es = get_es_client()
-    query_vector = embed_text(f"{cpt_code} {icd10_code} {clinical_summary}")
-
     query_text = f"{cpt_code} {icd10_code} {clinical_summary}"
+    query_vector = embed_text(query_text)
 
-    response = es.search(
+    for payer_filter in ({"term": {"payer_name": payer}}, None):
+        try:
+            result = _rrf_search(es, query_text, query_vector, payer_filter)
+            if result.get("hits", {}).get("hits"):
+                return result
+        except Exception:  # noqa: BLE001 - RRF may not be supported
+            pass
+    return _bm25_search(es, query_text, None)
+
+
+def _bm25_search(es, query_text: str, payer_filter: dict | None, size: int = 3) -> dict:
+    bool_query: dict = {
+        "should": [
+            {
+                "multi_match": {
+                    "query": query_text,
+                    "fields": [
+                        "cpt_codes^4",
+                        "icd10_codes^3",
+                        "clinical_indications^2",
+                        "title",
+                    ],
+                }
+            },
+        ],
+    }
+    if payer_filter:
+        bool_query["filter"] = [payer_filter]
+
+    return es.search(
         index="medical-policies",
-        retriever={
-            "rrf": {
-                "retrievers": [
-                    {
-                        "standard": {
-                            "query": {
-                                "bool": {
-                                    "must": [
-                                        {
-                                            "multi_match": {
-                                                "query": query_text,
-                                                "fields": [
-                                                    "cpt_codes^4",
-                                                    "icd10_codes^3",
-                                                    "clinical_indications^2",
-                                                    "title",
-                                                ],
-                                                "type": "best_fields",
-                                            }
-                                        }
-                                    ],
-                                    "filter": [{"term": {"payer_name": payer}}],
-                                }
-                            }
-                        }
-                    },
-                    {
-                        "standard": {
-                            "query": {
-                                "knn": {
-                                    "field": "policy_vector",
-                                    "query_vector": query_vector,
-                                    "k": 10,
-                                    "num_candidates": 50,
-                                    "filter": {"term": {"payer_name": payer}},
-                                }
-                            }
-                        }
-                    },
-                ],
-                "rank_window_size": 20,
-                "rank_constant": 60,
-            }
-        },
-        size=3,
-    )
-    return response.body
+        query={"bool": bool_query},
+        size=size,
+    ).body
 
 
 def match_payer_coverage_policy_fallback(
@@ -84,26 +111,10 @@ def match_payer_coverage_policy_fallback(
     back to this on a 400 so a demo doesn't die on a version mismatch.
     """
     es = get_es_client()
-    response = es.search(
-        index="medical-policies",
-        query={
-            "bool": {
-                "must": [
-                    {
-                        "multi_match": {
-                            "query": f"{cpt_code} {icd10_code} {clinical_summary}",
-                            "fields": [
-                                "cpt_codes^4",
-                                "icd10_codes^3",
-                                "clinical_indications^2",
-                                "title",
-                            ],
-                        }
-                    }
-                ],
-                "filter": [{"term": {"payer_name": payer}}],
-            }
-        },
-        size=3,
-    )
-    return response.body
+    query_text = f"{cpt_code} {icd10_code} {clinical_summary}"
+
+    for payer_filter in ({"term": {"payer_name": payer}}, None):
+        result = _bm25_search(es, query_text, payer_filter)
+        if result.get("hits", {}).get("hits"):
+            return result
+    return result

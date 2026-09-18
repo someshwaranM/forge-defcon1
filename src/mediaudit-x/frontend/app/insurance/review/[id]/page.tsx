@@ -53,15 +53,22 @@ export default function InsuranceReviewPage() {
   const [done, setDone] = useState<DoneEvent | null>(null);
   const [alerts, setAlerts] = useState<InteractionAlertData[]>([]);
   const [running, setRunning] = useState(false);
+  const [adjError, setAdjError] = useState<string | null>(null);
+  const [fhirClaim, setFhirClaim] = useState<any>(null);
   const [checkedForExisting, setCheckedForExisting] = useState(false);
   const [tab, setTab] = useState<(typeof TABS)[number]>("Overview");
 
-  // Real claim record
-  useEffect(() => {
-    fetch(`${API_BASE_URL}/claims/${claimId}`)
+  function loadClaim() {
+    fetch(`${API_BASE_URL}/claims/${claimId}/claim-json`)
       .then((res) => (res.ok ? res.json() : null))
-      .then(setClaim)
-      .finally(() => setClaimLoading(false));
+      .then(setFhirClaim)
+      .catch(() => setFhirClaim(null));
+    return fetch(`${API_BASE_URL}/claims/${claimId}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then(setClaim);
+  }
+  useEffect(() => {
+    loadClaim().finally(() => setClaimLoading(false));
   }, [claimId]);
 
   // Check for existing adjudication
@@ -77,12 +84,22 @@ export default function InsuranceReviewPage() {
   async function runAdjudication() {
     setRunning(true);
     setAlerts([]);
+    setAdjError(null);
 
-    const response = await fetch(`${API_BASE_URL}/claims/${claimId}/adjudicate`, { method: "POST" });
-    if (!response.body) {
+    let response: Response;
+    try {
+      response = await fetch(`${API_BASE_URL}/claims/${claimId}/adjudicate`, { method: "POST" });
+    } catch {
+      setAdjError(`Could not reach the API at ${API_BASE_URL}. Is the backend running?`);
       setRunning(false);
       return;
     }
+    if (!response.ok || !response.body) {
+      setAdjError(`AI analysis failed to start (HTTP ${response.status}).`);
+      setRunning(false);
+      return;
+    }
+    let finished = false;
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
@@ -104,10 +121,16 @@ export default function InsuranceReviewPage() {
         if (parsed.event === "interaction_alert") {
           setAlerts((prev) => [...prev, data]);
         } else if (parsed.event === "done") {
+          finished = true;
           setDone(data);
+        } else if (parsed.event === "error") {
+          finished = true;
+          setAdjError(data.detail || "AI analysis failed.");
         }
       }
     }
+    if (!finished) setAdjError("AI analysis stopped before returning a result. Check the backend logs.");
+    loadClaim().catch(() => {});
     setRunning(false);
   }
 
@@ -170,6 +193,12 @@ export default function InsuranceReviewPage() {
           </div>
         </div>
       </div>
+
+      {adjError && (
+        <Alert type="error" title="AI analysis could not run">
+          {adjError}
+        </Alert>
+      )}
 
       {/* Quick Summary Card */}
       <div className="card p-4">
@@ -325,6 +354,8 @@ export default function InsuranceReviewPage() {
 
       {tab === "Claim Details" && (
         <div className="space-y-5">
+          <StructuredClaimCard fhirClaim={fhirClaim} status={claim.status} />
+
           {/* Patient Information */}
           <div className="card p-6">
             <div className="flex items-center gap-2 mb-4">
@@ -600,6 +631,88 @@ export default function InsuranceReviewPage() {
       )}
 
       {tab === "Audit Trail" && <ClaimAuditTrail claimId={claim.claim_id} />}
+    </div>
+  );
+}
+
+function citationText(entry: any): string | null {
+  const ext = (entry?.extension || []).find((e: any) => String(e.url).endsWith("/source-citation"));
+  if (!ext) return null;
+  const part = (name: string) => ext.extension?.find((e: any) => e.url === name);
+  const docId = part("docId")?.valueString;
+  const source = docId === "hospital-form" ? "hospital form" : `${docId} p${part("page")?.valueInteger}`;
+  return `${source}: "${part("quote")?.valueString}"`;
+}
+
+function StructuredClaimCard({ fhirClaim, status }: { fhirClaim: any; status: string }) {
+  if (!fhirClaim) {
+    return (
+      <div className="card p-6">
+        <h2 className="text-lg font-semibold text-slate-900 mb-1">Structured Claim (FHIR R4)</h2>
+        <p className="text-sm text-slate-500">
+          Not received yet (claim is {status}). It is built once the codes have been extracted from the uploaded
+          documents and the claim is submitted.
+        </p>
+      </div>
+    );
+  }
+  const rows: { kind: string; code: string; display: string; cite: string | null }[] = [
+    ...(fhirClaim.diagnosis || []).map((d: any) => ({
+      kind: d.sequence === 1 ? "ICD-10 (primary)" : "ICD-10",
+      code: d.diagnosisCodeableConcept?.coding?.[0]?.code,
+      display: d.diagnosisCodeableConcept?.coding?.[0]?.display || "",
+      cite: citationText(d),
+    })),
+    ...(fhirClaim.item || []).map((i: any) => ({
+      kind: i.sequence === 1 ? "CPT (primary)" : "CPT",
+      code: i.productOrService?.coding?.[0]?.code,
+      display: i.productOrService?.coding?.[0]?.display || "",
+      cite: citationText(i),
+    })),
+    ...(fhirClaim.supportingInfo || [])
+      .filter((s: any) => s.category?.text === "medication")
+      .map((s: any) => ({
+        kind: "Medication",
+        code: s.code?.coding?.[0]?.code || "—",
+        display: s.code?.text || "",
+        cite: citationText(s),
+      })),
+  ];
+  return (
+    <div className="card p-6">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-slate-900">Structured Claim (FHIR R4) — as received</h2>
+        <span className="text-xs text-slate-500">
+          {fhirClaim.insurer?.display} · {fhirClaim.patient?.reference}
+          {fhirClaim.total ? ` · ${fhirClaim.total.currency} ${Number(fhirClaim.total.value).toLocaleString()}` : ""}
+        </span>
+      </div>
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left text-xs uppercase tracking-wide text-slate-400">
+            <th className="py-1 pr-3">Type</th>
+            <th className="py-1 pr-3">Code</th>
+            <th className="py-1 pr-3">Description</th>
+            <th className="py-1">Source</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, idx) => (
+            <tr key={idx} className="border-t border-slate-100 align-top">
+              <td className="py-2 pr-3 text-slate-500">{r.kind}</td>
+              <td className="py-2 pr-3 font-mono font-semibold text-slate-900">{r.code}</td>
+              <td className="py-2 pr-3 text-slate-700">{r.display}</td>
+              <td className="py-2 text-xs text-slate-500">{r.cite || "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <details className="mt-4">
+        <summary className="cursor-pointer text-sm font-medium text-blue-600">View claim JSON</summary>
+        <pre className="mt-2 max-h-96 overflow-auto rounded-lg bg-slate-900 p-4 text-xs text-slate-100">
+          {JSON.stringify(fhirClaim, null, 2)}
+        </pre>
+      </details>
     </div>
   );
 }
