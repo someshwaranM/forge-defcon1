@@ -45,12 +45,13 @@ def query_patient_clinical_trajectory(
         FROM fhir-clinical-ehr
         | WHERE patient_id == "{_esql_escape(patient_id)}" AND timestamp >= NOW() - {lookback_months * 30} DAYS
         | EVAL is_conservative_therapy = ({keyword_clause})
+        | WHERE is_conservative_therapy == true
         | STATS
-            total_conservative_encounters = COUNT_IF(is_conservative_therapy == true),
+            total_conservative_encounters = COUNT(*),
             earliest_therapy = MIN(timestamp),
             latest_therapy = MAX(timestamp)
           BY patient_id
-        | EVAL therapy_duration_days = (latest_therapy - earliest_therapy) / 86400000
+        | EVAL therapy_duration_days = DATE_DIFF("days", earliest_therapy, latest_therapy)
     """
 
     try:

@@ -1,19 +1,5 @@
 [
   {
-    "claim_id": "CLM-1001",
-    "patient_id": "PAT-883910",
-    "payer_name": "UnitedHealthcare",
-    "cpt_code": "27447",
-    "icd10_code": "M17.11",
-    "claim_amount": 48000.00,
-    "claim_type": "inpatient_prior_auth",
-    "submitted_date": "2026-08-01",
-    "status": "PENDING",
-    "attached_documents": [
-      { "doc_id": "DOC-1", "doc_type": "ehr_pdf", "source_uri": "sample://ehr-883910.pdf" }
-    ]
-  },
-  {
     "claim_id": "CLM-1002",
     "patient_id": "PAT-772341",
     "payer_name": "Aetna",
