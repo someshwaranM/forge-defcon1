@@ -56,13 +56,23 @@ def embed_text(text: str, dim: int = EMBED_DIM) -> list[float]:
     """
     Deterministic hashed bag-of-words/bigrams embedding, L2-normalized.
     Same input always produces the same vector (needed for reproducible
-    eval numbers) and empty/whitespace input returns a zero vector rather
-    than raising, since dense_vector fields tolerate all-zero rows.
+    eval numbers).
+
+    FIXED (18 Sept, found while loading real Synthea Observation records
+    that have no code_display/clinician_notes text): empty/whitespace
+    input used to return an all-zero vector. That's fine for a plain
+    dense_vector field, but notes_vector/policy_vector use `dot_product`
+    similarity per the mapping spec, and dot_product strictly requires
+    unit-length vectors -- ES rejects an all-zero row at index time with
+    a document_parsing_exception ("The [dot_product] similarity can only
+    be used with unit-length vectors"), which is a hard failure, not a
+    warning. Empty input now hashes a fixed sentinel token instead, so it
+    still gets a deterministic, valid unit vector, distinguishable from
+    (and never colliding with) any real content's embedding for
+    similarity search purposes.
     """
     vector = [0.0] * dim
-    tokens = _tokens(text or "")
-    if not tokens:
-        return vector
+    tokens = _tokens(text or "") or ["__empty_embedding_input__"]
 
     counts: dict[str, int] = {}
     for tok in tokens:

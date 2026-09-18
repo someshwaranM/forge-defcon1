@@ -59,8 +59,15 @@ def test_drug_interaction_catches_brand_generic_mismatch():
 
 
 def test_resolve_medication_to_rxnorm():
-    assert resolve_medication_to_rxnorm("Toradol") == "6960"
-    assert resolve_medication_to_rxnorm("Ketorolac") == "6960"
+    # FIXED (18 Sept): this asserted "6960", which is not Ketorolac's
+    # real RxCUI anywhere in this repo -- it's an arbitrary local `code`
+    # value used in data/sample/sample_fhir_encounters.json's Toradol
+    # MedicationRequest fixture (a field resolve_medication_to_rxnorm
+    # never reads). The actual verified RxCUI this function should
+    # return is drug_b_rxnorm from the fda-drug-interactions record
+    # (INT-2 in data/sample/sample_drug_interactions.json): "35827".
+    assert resolve_medication_to_rxnorm("Toradol") == "35827"
+    assert resolve_medication_to_rxnorm("Ketorolac") == "35827"
 
 
 def test_audit_ledger_detects_tampering():

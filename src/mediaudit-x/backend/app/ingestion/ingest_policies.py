@@ -158,7 +158,9 @@ def ingest(pdf_path: Path, payer_name: str, policy_id: str, dry_run: bool = Fals
 
     if not dry_run:
         es = get_es_client()
-        es.index(index="medical-policies", document=doc)
+        # FIXED (18 Sept): stable id=policy_id, same idempotency fix as
+        # the other loaders.
+        es.index(index="medical-policies", document=doc, id=policy_id)
         es.indices.refresh(index="medical-policies")
         print(f"[loaded] -> medical-policies as {policy_id}")
     else:
