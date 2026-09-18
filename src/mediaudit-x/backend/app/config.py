@@ -77,6 +77,18 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     anthropic_model: str = "claude-sonnet-4-5"
 
+    # OCR (Stage 2 of Architecture Plan.txt). "tesseract" runs local
+    # Tesseract OCR for scanned pages/images (needs the tesseract binary
+    # installed separately -- see backend/README); "none" skips OCR
+    # entirely and scanned pages come back ocr_status=FAILED; "textract"
+    # is spec'd but not yet implemented here (unverified AWS Bedrock-style
+    # per-account setup, same caveat as BEDROCK_MODEL_ID above).
+    ocr_provider: str = "tesseract"
+
+    # Explicit path to tesseract.exe if it isn't on PATH (common on
+    # Windows, e.g. "C:\\Program Files\\Tesseract-OCR\\tesseract.exe").
+    tesseract_cmd: str | None = None
+
     app_env: str = "development"
 
     # Document ingestion (app/pipeline/ingestion). Limits are enforced by
