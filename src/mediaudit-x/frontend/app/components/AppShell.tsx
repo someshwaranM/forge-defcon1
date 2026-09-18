@@ -55,6 +55,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     router.push("/"); // Always go to dashboard when switching
   };
 
+  // Render login page without shell
+  if (pathname.startsWith("/login")) {
+    return <>{children}</>;
+  }
+
+  // Redirect to login if not authenticated
   if (!isAuthenticated) {
     return null; // Show nothing while redirecting
   }
