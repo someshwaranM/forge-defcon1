@@ -1,38 +1,39 @@
 """
-OCR extraction: turns an uploaded document (PDF, image, or plain text) into
-per-page text, tagged with which engine produced it.
+OCR extraction: turns a validated claim document's bytes (already checked
+by app.pipeline.ingestion) into per-page text, tagged with which engine
+produced it.
 
-Engine order per page, in keeping with this repo's zero-hallucination rule
-(never invent text that isn't really on the page):
+`detected_type` comes from the ingestion pipeline's magic-byte sniffing
+(app/pipeline/ingestion/checks.py) -- trusted here, never re-derived from
+a filename or extension.
 
+Engine order, in keeping with the zero-hallucination rule (never invent
+text that isn't really on the page):
   1. A PDF's embedded text layer via pdfplumber -- exact, free, no OCR
      needed. Used whenever a page yields at least MIN_TEXT_CHARS.
-  2. Tesseract OCR (via pytesseract) for scanned PDF pages and image files
-     with no usable text layer.
-  3. If Tesseract's binary isn't installed, or OCR still yields nothing,
-     the page is marked engine="failed" with empty text rather than
-     guessed content -- the pipeline continues, just with less to draft
-     from on that page.
+  2. Tesseract OCR (pytesseract) for scanned PDF pages, and always for
+     standalone images (png/jpeg/tiff), which have no text layer to try
+     first. TIFF may carry multiple frames -- each becomes its own page,
+     matching claim-documents.page_count's "TIFF: frames" convention.
+  3. If Tesseract's binary isn't installed, or OCR yields nothing, the
+     page comes back engine="failed" with empty text rather than guessed
+     content -- the caller continues with the next page/document either
+     way.
 
-Tesseract note: pytesseract is only a wrapper that shells out to the
-`tesseract` binary, which is a separate OS-level install (not pip). If it
-isn't on PATH, set `tesseract_cmd` in .env. See backend/README for the
-per-OS install step.
+Tesseract note: pytesseract only wraps the `tesseract` binary, a separate
+OS-level install (not pip) -- see README.md "Known limitations".
 """
 import re
 import unicodedata
 from dataclasses import dataclass, field
-from pathlib import Path
+from io import BytesIO
 
 import pdfplumber
+from PIL import Image, ImageSequence
 
 from app.config import settings
 
 MIN_TEXT_CHARS = 20  # below this, a PDF page is treated as scanned/image-only
-
-PDF_EXTENSIONS = {".pdf"}
-IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp"}
-TEXT_EXTENSIONS = {".txt"}
 
 _WS_RUN_RE = re.compile(r"[ \t]+")
 
@@ -41,7 +42,7 @@ _WS_RUN_RE = re.compile(r"[ \t]+")
 class PageResult:
     page_number: int  # 1-based
     text: str
-    engine: str  # "pdf_text" | "tesseract" | "text_file" | "failed"
+    engine: str  # "pdf_text" | "tesseract" | "failed"
     ocr_confidence: float | None  # Tesseract mean word confidence (0-100)
     char_count: int = field(init=False)
 
@@ -84,9 +85,9 @@ def _ocr_image_via_tesseract(image) -> tuple[str, float | None] | None:
     return text, mean_conf
 
 
-def _extract_pdf(path: Path) -> list[PageResult]:
+def _extract_pdf(data: bytes) -> list[PageResult]:
     try:
-        pdf = pdfplumber.open(path)
+        pdf = pdfplumber.open(BytesIO(data))
     except Exception:
         return [PageResult(1, "", "failed", None)]
 
@@ -111,40 +112,43 @@ def _extract_pdf(path: Path) -> list[PageResult]:
     return pages
 
 
-def _extract_image(path: Path) -> list[PageResult]:
+def _extract_image_frames(data: bytes) -> list[PageResult]:
+    """PNG/JPEG always have one frame; TIFF may have several -- each frame
+    becomes its own page, same as claim-documents.page_count already
+    counts them."""
     if settings.ocr_provider != "tesseract":
-        return [PageResult(1, "", "failed", None)]
+        try:
+            with Image.open(BytesIO(data)) as img:
+                frame_count = getattr(img, "n_frames", 1)
+        except Exception:
+            frame_count = 1
+        return [PageResult(i, "", "failed", None) for i in range(1, frame_count + 1)]
 
     try:
-        from PIL import Image
-        image = Image.open(path)
+        image = Image.open(BytesIO(data))
     except Exception:
         return [PageResult(1, "", "failed", None)]
 
-    ocr_result = _ocr_image_via_tesseract(image)
-    if ocr_result is None:
-        return [PageResult(1, "", "failed", None)]
-    text, confidence = ocr_result
-    return [PageResult(1, normalize_text(text), "tesseract", confidence)]
+    pages: list[PageResult] = []
+    with image:
+        for i, frame in enumerate(ImageSequence.Iterator(image), start=1):
+            ocr_result = _ocr_image_via_tesseract(frame.convert("RGB"))
+            if ocr_result is None:
+                pages.append(PageResult(i, "", "failed", None))
+            else:
+                text, confidence = ocr_result
+                pages.append(PageResult(i, normalize_text(text), "tesseract", confidence))
+    return pages
 
 
-def _extract_text_file(path: Path) -> list[PageResult]:
-    raw = path.read_text(encoding="utf-8", errors="replace")
-    return [PageResult(1, normalize_text(raw), "text_file", None)]
-
-
-def extract_document(path: Path) -> list[PageResult]:
-    """Dispatches on file extension. Returns one PageResult per PDF page, or
-    a single-page result for an image or text file. A page that can't be
-    read comes back as engine="failed" with empty text rather than raising,
-    so one bad page never aborts the rest of the document; an unsupported
-    file type still raises ValueError so the upload boundary can reject it
-    (415) before it ever reaches here."""
-    ext = path.suffix.lower()
-    if ext in PDF_EXTENSIONS:
-        return _extract_pdf(path)
-    if ext in IMAGE_EXTENSIONS:
-        return _extract_image(path)
-    if ext in TEXT_EXTENSIONS:
-        return _extract_text_file(path)
-    raise ValueError(f"Unsupported document type: {ext}")
+def extract_document(data: bytes, detected_type: str) -> list[PageResult]:
+    """`detected_type`: "pdf" | "png" | "jpeg" | "tiff", from
+    app.pipeline.ingestion.checks.detect_type -- trust this rather than
+    re-sniffing. Returns one PageResult per PDF page or image frame. A
+    page that can't be read comes back engine="failed" rather than
+    raising, so one bad page never aborts the rest of the document."""
+    if detected_type == "pdf":
+        return _extract_pdf(data)
+    if detected_type in ("png", "jpeg", "tiff"):
+        return _extract_image_frames(data)
+    raise ValueError(f"Unsupported detected_type: {detected_type!r}")

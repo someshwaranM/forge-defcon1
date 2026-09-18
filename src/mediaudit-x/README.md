@@ -11,6 +11,18 @@ source, rather than left to LLM inference alone.
 
 ## Core capabilities
 
+- **Document intake + OCR** (`pipeline/ingestion/` + `pipeline/ocr/`,
+  see `INGESTION.md`) — a hospital uploads PDFs/images against a claim;
+  each file is validated (magic-byte content sniffing, size/page/pixel
+  limits, duplicate detection), stored, and registered in `claim-documents`
+  with `ocr_status: PENDING`. `POST /claims/{claim_id}/ocr` then extracts
+  every PENDING document's text (pdfplumber's embedded text layer first,
+  Tesseract OCR for scanned pages and images -- AWS Textract is spec'd as
+  an alternative engine but not implemented; `ocr_provider` in
+  `config.py` selects between them) and writes offset-addressable chunks
+  to `document-chunks` (with embeddings, ready for the same RRF hybrid
+  search pattern policy matching uses) so every extracted fact can cite
+  back to `(doc_id, page, char_start, char_end)`.
 - **Clinical trajectory search** (`trajectory_tool.py`) — a real ES|QL
   bi-temporal query (with a DSL aggregation fallback) that verifies
   step-therapy timelines against actual longitudinal patient history,
@@ -160,10 +172,9 @@ source, rather than left to LLM inference alone.
   deployed (a container image, a VM, etc.): Elasticsearch Serverless is
   only the search/data layer and never runs this Python app, so whatever
   environment does run it needs the same OS-level `tesseract-ocr` package
-  baked in, in addition to `pip install -r requirements.txt`. There's no
-  Dockerfile in this repo yet; when one is added, it needs an explicit
-  `apt-get install -y tesseract-ocr` layer or OCR will silently stop
-  working in that environment too.
+  baked in, in addition to `pip install -r requirements.txt`. The backend
+  `Dockerfile` already does this (`apt-get install -y tesseract-ocr`) --
+  see "Quickstart — Docker" below.
 
 ## Quickstart — Docker (recommended)
 
@@ -247,41 +258,10 @@ API docs: http://localhost:8000/docs
 cd backend && python -m pytest tests/ -v
 ```
 
-### Running the backend in Docker
-
-```bash
-cd backend
-docker build -t mediaudit-x-backend .
-docker run --rm -p 8000:8000 --env-file .env mediaudit-x-backend
-```
-
-- The image bakes in the Tesseract OCR binary (`apt-get install
-  tesseract-ocr`) so OCR works out of the box in the container, unlike a
-  bare `pip install` (see "Known limitations" above).
-- `--env-file .env` passes your Elastic/AWS/Anthropic credentials as
-  container env vars; the `.env` file itself is never copied into the
-  image (`.dockerignore` excludes it).
-- `/app/uploads` (where `POST /claims/{id}/documents` writes files) is
-  declared as a volume; mount one (`-v mediaudit-uploads:/app/uploads`)
-  if you want uploads to survive a container restart -- otherwise they're
-  as ephemeral as local-disk storage already is today.
-- The ingestion scripts (`load_sample_data.py` etc.) are **not** run as
-  part of the image's own startup, and `data/` is not copied into it —
-  run them locally against your target cluster instead (step 3 above).
-  If you do want to run one inside the container, note that each script
-  resolves `data/` via four `.parent` calls up from its own file, which
-  inside this image lands at the container's filesystem root, not
-  `/app/data` — e.g. `docker run --rm --env-file .env -v
-  "$(pwd)/../data:/data" mediaudit-x-backend python -m
-  app.ingestion.load_sample_data`. This mirrors the local repo layout
-  (`backend/app/ingestion/... -> backend -> mediaudit-x/data`) rather
-  than being a deliberately chosen container path -- worth revisiting if
-  it's confusing in practice.
-- Not yet done: no docker-compose, no frontend Dockerfile, no CI image
-  build. Elasticsearch itself is Serverless and is never containerized
-  here.
-
-Requires steps 2-3 to have run first against the same cluster.
+Requires steps 2-3 to have run first against the same cluster. (To run
+the backend in Docker instead of this local venv, see "Quickstart —
+Docker" above -- `docker-setup.sh` covers the equivalent of steps 2-3
+automatically.)
 
 ### 6. Frontend
 
@@ -300,13 +280,17 @@ new claim, optionally attaching supporting documents.
 
 ```
 backend/app/
-  routers/       FastAPI endpoints (claims, adjudication, patients)
+  routers/       FastAPI endpoints (claims, intake, ocr, adjudication, patients)
+  pipeline/
+    ingestion/    document upload -> checks -> storage -> claim-files/claim-documents (see INGESTION.md)
+    ocr/          claim-documents (PENDING) -> extract + chunk -> document-pages/document-chunks
   agent/          orchestrator.py — the agent loop
   tools/          trajectory / policy matcher / drug interaction / audit ledger
   actuators/      letter + FHIR ClaimResponse generation
   embeddings/     embed.py — vector embedding function
-  ingestion/      one script per data source
-  indices/        Elasticsearch index mappings
+  ingestion/      one script per seed data source (data/sample, CMS LCDs, Synthea) -- not to be
+                  confused with pipeline/ingestion/, the live document-upload stage above
+  indices/        Elasticsearch index mappings + names.py constants
 frontend/app/      Next.js dashboard, claim detail, new-claim form
 data/               sample/ and synthea_samples/ fixture data
 eval/               benchmark harness (skeleton)
