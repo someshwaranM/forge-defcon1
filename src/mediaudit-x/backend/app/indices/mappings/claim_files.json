@@ -1,6 +1,7 @@
 {
   "mappings": {
     "properties": {
+      "fhir_claim":      { "type": "object", "enabled": false },
       "claim_id":        { "type": "keyword" },
       "patient_id":      { "type": "keyword" },
       "payer_name":      { "type": "keyword" },

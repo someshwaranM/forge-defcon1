@@ -8,17 +8,22 @@ app.pipeline.ingestion (all validation and storage logic lives there).
 
 Error bodies keep `detail` a plain string (the frontend shows it as-is)
 and add a machine-readable `code` plus per-file `rejected` reasons.
+
+When a DRAFT claim receives documents, automatic processing (OCR -> draft
+-> PENDING, app/pipeline/processing.py) is started as a background task
+after the response is sent, so the upload itself stays fast.
 """
 import json
 from dataclasses import asdict
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
 from app.pipeline.ingestion import get_ingestion_service
 from app.pipeline.ingestion.models import ClaimIntake, IncomingFile, IngestionError
 from app.pipeline.ingestion.service import IngestionService
+from app.pipeline.processing import process_claim_in_background
 
 router = APIRouter(prefix="/claims", tags=["ingestion"])
 
@@ -47,8 +52,14 @@ def _error(e: IngestionError) -> JSONResponse:
     })
 
 
+def _schedule_processing(background_tasks: BackgroundTasks, claim: dict, accepted: list) -> None:
+    if accepted and claim.get("status") == "DRAFT":
+        background_tasks.add_task(process_claim_in_background, claim["claim_id"])
+
+
 @router.post("/intake", status_code=201)
 async def intake_claim(
+    background_tasks: BackgroundTasks,
     patient_id: str | None = Form(None),
     payer_name: str | None = Form(None),
     claim_type: str = Form("professional"),
@@ -89,6 +100,7 @@ async def intake_claim(
     except IngestionError as e:
         return _error(e)
 
+    _schedule_processing(background_tasks, result.claim, result.accepted)
     return {
         "claim": result.claim,
         "accepted": result.accepted,
@@ -99,6 +111,7 @@ async def intake_claim(
 @router.post("/{claim_id}/documents", status_code=201)
 async def upload_claim_documents(
     claim_id: str,
+    background_tasks: BackgroundTasks,
     files: list[UploadFile] | None = File(None),
     file: UploadFile | None = File(None),  # single-file field the existing frontend sends
     doc_type: str = Form("supporting_document"),
@@ -111,6 +124,7 @@ async def upload_claim_documents(
     except IngestionError as e:
         return _error(e)
 
+    _schedule_processing(background_tasks, result.claim, result.accepted)
     first = result.accepted[0]
     return {
         # Pre-pipeline response fields, kept for existing callers.

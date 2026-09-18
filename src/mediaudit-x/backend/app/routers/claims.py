@@ -105,6 +105,23 @@ def get_claim(claim_id: str):
     return {"id": hit["_id"], "index": hit["_index"], **hit["_source"]}
 
 
+@router.get("/{claim_id}/claim-json")
+def get_claim_json(claim_id: str):
+    """The structured claim sent to the insurer: a FHIR R4 Claim, built when
+    the claim is submitted (see app/pipeline/claim_json.py). 404 until the
+    claim's codes have been extracted and it has been submitted."""
+    es = get_es_client()
+    hit = _find_claim(es, claim_id)
+    fhir_claim = hit["_source"].get("fhir_claim")
+    if not fhir_claim:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Claim {claim_id} has no structured claim yet (status {hit['_source'].get('status')}); "
+                   "it is built once codes are extracted from the documents and the claim is submitted.",
+        )
+    return fhir_claim
+
+
 @router.get("/{claim_id}/adjudications")
 def get_latest_adjudication(claim_id: str):
     """

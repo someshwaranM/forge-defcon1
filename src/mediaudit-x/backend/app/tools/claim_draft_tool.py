@@ -76,6 +76,7 @@ from app.drafting.ranker import rank_field
 from app.es_client import get_es_client
 from app.indices.names import ALL_CLAIMS
 from app.llm_client import make_llm_client
+from app.pipeline.claim_json import build_fhir_claim
 from app.tools.audit_ledger import append_event
 from app.tools.drug_interaction_tool import resolve_medication_to_rxnorm
 
@@ -167,6 +168,21 @@ EXTRACTION_TOOL = {
                 },
             },
             "total_billed_amount": {"type": "number"},
+            "payer_name": {
+                "type": "string",
+                "description": (
+                    "Insurance company / payer name as stated in the documents "
+                    "or form (e.g. 'UnitedHealthcare', 'Aetna', 'Medicare'). "
+                    "Return the name exactly as written. Empty string if not mentioned."
+                ),
+            },
+            "patient_id": {
+                "type": "string",
+                "description": (
+                    "Patient ID / MRN / member number as stated in the documents "
+                    "or form. Return it exactly as written. Empty string if not found."
+                ),
+            },
         },
         "required": ["diagnoses", "procedures", "medications", "total_billed_amount"],
     },
@@ -194,6 +210,50 @@ class OcrDocument:
     @property
     def full_text(self) -> str:
         return "\n".join(b.text for b in self.blocks)
+
+
+FORM_DOC_ID = "hospital-form"
+FORM_PAGE_NUMBER = 1
+
+_FORM_FIELDS = [
+    ("clinical", "chief_complaint", "Chief complaint"),
+    ("clinical", "problem_description", "Problem description"),
+    ("clinical", "symptoms", "Symptoms"),
+    ("clinical", "duration", "Duration"),
+    ("clinical", "diagnosis_in_words", "Diagnosis"),
+    ("clinical", "procedures", "Procedures performed"),
+    ("clinical", "treatment", "Treatment"),
+    ("clinical", "medications", "Medications"),
+    ("admission", "admission_date", "Admission date"),
+    ("admission", "discharge_date", "Discharge date"),
+    ("services", "services_provided", "Services provided"),
+    ("hospital", "department", "Department"),
+    ("insurance", "company", "Insurance company"),
+    ("insurance", "policy_number", "Policy number"),
+]
+
+
+def form_evidence_block(claim: dict) -> OcrBlock | None:
+    details = claim.get("details") or {}
+    lines = []
+    for section, key, label in _FORM_FIELDS:
+        value = (details.get(section) or {}).get(key)
+        if value:
+            lines.append(f"{label}: {value}")
+    if details.get("estimated_total_cost"):
+        lines.append(f"Estimated total cost: {details['estimated_total_cost']}")
+    if not lines:
+        return None
+    return OcrBlock(text="\n".join(lines), page_number=FORM_PAGE_NUMBER, doc_id=FORM_DOC_ID)
+
+
+def with_form_evidence(claim: dict, doc: OcrDocument) -> OcrDocument:
+    """The OCR'd documents plus the hospital form block (if the form has
+    any clinical details). Returns a new OcrDocument; `doc` is untouched."""
+    block = form_evidence_block(claim)
+    if block is None or any(b.doc_id == FORM_DOC_ID for b in doc.blocks):
+        return doc
+    return OcrDocument(doc_id=doc.doc_id, blocks=[*doc.blocks, block])
 
 
 # --------------------------------------------------------------------------
@@ -292,6 +352,13 @@ def _format_candidates_block(local_candidates: list[dict]) -> str:
 def _build_extraction_prompt(doc: OcrDocument, local_candidates: list[dict]) -> str:
     pages = "\n\n".join(f"[doc {b.doc_id or doc.doc_id} page {b.page_number}] {b.text}" for b in doc.blocks)
     candidates_block = _format_candidates_block(local_candidates)
+    has_form = any(b.doc_id == FORM_DOC_ID for b in doc.blocks)
+    form_note = f"""
+The block tagged [doc {FORM_DOC_ID} page {FORM_PAGE_NUMBER}] is not a clinical
+document: it is what the hospital typed on the claim form. Use it to
+understand what was done and billed, but when the same fact appears in a
+clinical document, cite the document instead of the form. Cite the form
+only for facts no document states.""" if has_form else ""
     return f"""You are a certified medical coder assistant. Read the clinical
 documentation below and identify every diagnosis and procedure it
 documents, assigning each the correct official ICD-10-CM or CPT/HCPCS
@@ -310,6 +377,9 @@ Separately, list every medication mentioned as newly prescribed or
 currently active for this patient, with the same citation rules. If none
 are mentioned, return an empty medications list.
 If a total billed amount is not stated in the document, use 0.
+Also extract the insurance company / payer name and the patient ID / MRN
+if they appear anywhere in the documents or form. Return them exactly as
+written; leave as empty string if not found.{form_note}
 
 CANDIDATES:
 {candidates_block}
@@ -453,6 +523,7 @@ def build_claim_draft(claim_id: str, doc: OcrDocument) -> dict:
     logger.info("Building draft for claim %s from %d OCR block(s) (doc bundle %s)",
                 claim_id, len(doc.blocks), doc.doc_id)
     claim = fetch_claim(claim_id)
+    doc = with_form_evidence(claim, doc)
 
     code_dictionary = load_code_dictionary()
     local_candidates = gather_local_candidates(doc, code_dictionary)
@@ -481,6 +552,8 @@ def build_claim_draft(claim_id: str, doc: OcrDocument) -> dict:
         "cpt_code": procedures[0]["code"] if procedures else None,
         "icd10_code": diagnoses[0]["code"] if diagnoses else None,
         "claim_amount": llm_payload.get("total_billed_amount") or None,
+        "payer_name": (llm_payload.get("payer_name") or "").strip() or None,
+        "patient_id": (llm_payload.get("patient_id") or "").strip() or None,
         "extracted_diagnoses": diagnoses,
         "extracted_procedures": procedures,
         "extracted_medications": medications,
@@ -498,7 +571,8 @@ def build_claim_draft(claim_id: str, doc: OcrDocument) -> dict:
     return draft
 
 
-def persist_claim_draft(draft: dict, coder_corrections: list[dict] | None = None) -> dict:
+def persist_claim_draft(draft: dict, coder_corrections: list[dict] | None = None,
+                        confirmed_by: str = "coder") -> dict:
     """
     Call only after a coder has reviewed/confirmed the draft from
     build_claim_draft() (possibly with edits applied to it first). Fills in
@@ -557,6 +631,20 @@ def persist_claim_draft(draft: dict, coder_corrections: list[dict] | None = None
         updated["icd10_code"] = draft["icd10_code"]
     if draft.get("claim_amount"):
         updated["claim_amount"] = draft["claim_amount"]
+    if not updated.get("payer_name"):
+        details = updated.get("details") or {}
+        updated["payer_name"] = (
+            draft.get("payer_name")
+            or (details.get("insurance") or {}).get("company")
+            or None
+        )
+    if not updated.get("patient_id"):
+        updated["patient_id"] = draft.get("patient_id") or None
+
+    updated["fhir_claim"] = build_fhir_claim(updated)
+    fhir_claim_sha256 = hashlib.sha256(
+        json.dumps(updated["fhir_claim"], sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
 
     es.index(index=index_name, id=hit["_id"], document=updated)
     es.indices.refresh(index=index_name)
@@ -565,6 +653,8 @@ def persist_claim_draft(draft: dict, coder_corrections: list[dict] | None = None
         claim_id=claim_id,
         event_type="CLAIM_DRAFT_CONFIRMED",
         payload={
+            "confirmed_by": confirmed_by,
+            "origin": draft.get("origin"),
             "evidence_hash": draft["evidence_hash"],
             "cpt_code": updated.get("cpt_code"),
             "icd10_code": updated.get("icd10_code"),
@@ -572,6 +662,7 @@ def persist_claim_draft(draft: dict, coder_corrections: list[dict] | None = None
             "extracted_diagnoses": draft["extracted_diagnoses"],
             "extracted_procedures": draft["extracted_procedures"],
             "extracted_medications": draft["extracted_medications"],
+            "fhir_claim_sha256": fhir_claim_sha256,
         },
         ref_id=draft["source_doc_id"],
     )

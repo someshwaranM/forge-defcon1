@@ -208,7 +208,7 @@ export default function CreateClaimPage() {
           <h1 className="text-2xl font-semibold text-slate-900 mb-2">Claim Created</h1>
           <p className="text-slate-600 mb-6">
             Saved as <span className="font-medium">{submitResult?.claim.status ?? "DRAFT"}</span> with its details and
-            documents. Codes are added next, from the uploaded documents.
+            documents. Medical codes are extracted automatically from the uploaded documents and the form details you entered.
           </p>
 
           <div className="bg-slate-50 rounded-lg p-4 mb-6 text-left">
