@@ -9,6 +9,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from app.logging_config import configure_logging
+configure_logging()
+
 from app.indices.create_indices import ensure_indices
 from app.pipeline.ingestion.storage import upload_root
 from app.routers import claims, adjudication, intake, ocr, patients
