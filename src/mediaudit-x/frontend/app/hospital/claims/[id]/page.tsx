@@ -15,17 +15,22 @@ export default function HospitalClaimViewPage() {
 
   const [claim, setClaim] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
     // Fetch claim details from API
     fetch(`${API_BASE_URL}/claims/${claimId}`)
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error(`API returned ${res.status}`);
+        return res.json();
+      })
       .then((data) => {
         setClaim(data);
         setLoading(false);
       })
       .catch((error) => {
         console.error("Error fetching claim:", error);
+        setFetchError(error?.message || "Could not reach the API");
         setLoading(false);
       });
   }, [claimId]);
@@ -44,7 +49,7 @@ export default function HospitalClaimViewPage() {
   if (!claim) {
     return (
       <div className="card p-8 text-center">
-        <p className="text-slate-600">Claim not found</p>
+        <p className="text-slate-600">{fetchError ? `Could not load this claim: ${fetchError}` : "Claim not found"}</p>
         <Link href="/claims" className="text-blue-600 hover:underline mt-2 inline-block">
           Back to My Claims
         </Link>
