@@ -261,31 +261,31 @@ export default function CreateClaimPage() {
               <h2 className="text-lg font-semibold text-slate-900">Patient Information</h2>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <FormField label="Patient Name" required>
+              <FormField label="Patient Name">
                 <input
                   value={formData.patientName}
                   onChange={(e) => updateForm("patientName", e.target.value)}
                   placeholder="e.g., John Doe"
                   className="input"
-                  required
+                 
                 />
               </FormField>
-              <FormField label="Age" required>
+              <FormField label="Age">
                 <input
                   type="number"
                   value={formData.patientAge}
                   onChange={(e) => updateForm("patientAge", e.target.value)}
                   placeholder="e.g., 65"
                   className="input"
-                  required
+                 
                 />
               </FormField>
-              <FormField label="Gender" required>
+              <FormField label="Gender">
                 <select
                   value={formData.patientGender}
                   onChange={(e) => updateForm("patientGender", e.target.value)}
                   className="input"
-                  required
+                 
                 >
                   <option value="">Select...</option>
                   <option value="Male">Male</option>
@@ -312,56 +312,56 @@ export default function CreateClaimPage() {
               <span className="text-xs text-slate-500">(Describe in plain language)</span>
             </div>
             <div className="space-y-4">
-              <FormField label="Main Complaint" required>
+              <FormField label="Main Complaint">
                 <input
                   value={formData.chiefComplaint}
                   onChange={(e) => updateForm("chiefComplaint", e.target.value)}
                   placeholder="e.g., Severe knee pain"
                   className="input"
-                  required
+                 
                 />
               </FormField>
 
-              <FormField label="Describe the Problem" className="col-span-2" required>
+              <FormField label="Describe the Problem" className="col-span-2">
                 <textarea
                   value={formData.problemDescription}
                   onChange={(e) => updateForm("problemDescription", e.target.value)}
                   placeholder="e.g., Patient has severe arthritis in right knee. Bone grinding on bone. Can't walk properly or climb stairs."
                   className="input"
                   rows={3}
-                  required
+                 
                 />
               </FormField>
 
-              <FormField label="Symptoms" required>
+              <FormField label="Symptoms">
                 <textarea
                   value={formData.symptomsDescription}
                   onChange={(e) => updateForm("symptomsDescription", e.target.value)}
                   placeholder="e.g., Constant pain, swelling, stiffness, difficulty walking, can't sleep due to pain"
                   className="input"
                   rows={2}
-                  required
+                 
                 />
               </FormField>
 
-              <FormField label="How Long Has This Been a Problem?" required>
+              <FormField label="How Long Has This Been a Problem?">
                 <input
                   value={formData.howLongProblem}
                   onChange={(e) => updateForm("howLongProblem", e.target.value)}
                   placeholder="e.g., Over 2 years, getting worse"
                   className="input"
-                  required
+                 
                 />
               </FormField>
 
-              <FormField label="What Did We Diagnose?" required>
+              <FormField label="What Did We Diagnose?">
                 <textarea
                   value={formData.diagnosisInWords}
                   onChange={(e) => updateForm("diagnosisInWords", e.target.value)}
                   placeholder="e.g., Severe wear and tear arthritis of the right knee with damaged cartilage"
                   className="input"
                   rows={2}
-                  required
+                 
                 />
               </FormField>
             </div>
@@ -375,25 +375,25 @@ export default function CreateClaimPage() {
               <span className="text-xs text-slate-500">(What we did to help)</span>
             </div>
             <div className="space-y-4">
-              <FormField label="Treatment Summary" required>
+              <FormField label="Treatment Summary">
                 <textarea
                   value={formData.treatmentDescription}
                   onChange={(e) => updateForm("treatmentDescription", e.target.value)}
                   placeholder="e.g., Patient tried physical therapy for 6 months but didn't improve. Replaced the damaged knee with an artificial one."
                   className="input"
                   rows={3}
-                  required
+                 
                 />
               </FormField>
 
-              <FormField label="Procedures/Surgery Performed" required>
+              <FormField label="Procedures/Surgery Performed">
                 <textarea
                   value={formData.proceduresDescription}
                   onChange={(e) => updateForm("proceduresDescription", e.target.value)}
                   placeholder="e.g., Knee replacement surgery - removed damaged knee joint and put in artificial joint"
                   className="input"
                   rows={2}
-                  required
+                 
                 />
               </FormField>
 
@@ -413,32 +413,32 @@ export default function CreateClaimPage() {
           <div className="card p-5">
             <h2 className="text-lg font-semibold text-slate-900 mb-4">Hospital Stay Details</h2>
             <div className="grid grid-cols-2 gap-4">
-              <FormField label="Admission Date" required>
+              <FormField label="Admission Date">
                 <input
                   type="date"
                   value={formData.admissionDate}
                   onChange={(e) => updateForm("admissionDate", e.target.value)}
                   className="input"
-                  required
+                 
                 />
               </FormField>
-              <FormField label="Discharge Date" required>
+              <FormField label="Discharge Date">
                 <input
                   type="date"
                   value={formData.dischargeDate}
                   onChange={(e) => updateForm("dischargeDate", e.target.value)}
                   className="input"
-                  required
+                 
                 />
               </FormField>
-              <FormField label="Total Days in Hospital" required>
+              <FormField label="Total Days in Hospital">
                 <input
                   type="number"
                   value={formData.lengthOfStay}
                   onChange={(e) => updateForm("lengthOfStay", e.target.value)}
                   placeholder="e.g., 4"
                   className="input"
-                  required
+                 
                 />
               </FormField>
             </div>
@@ -448,12 +448,12 @@ export default function CreateClaimPage() {
           <div className="card p-5">
             <h2 className="text-lg font-semibold text-slate-900 mb-4">Facilities & Services Used</h2>
             <div className="space-y-4">
-              <FormField label="Room Type" required>
+              <FormField label="Room Type">
                 <select
                   value={formData.roomCategory}
                   onChange={(e) => updateForm("roomCategory", e.target.value)}
                   className="input"
-                  required
+                 
                 >
                   <option value="">Select...</option>
                   <option value="General Ward">General Ward (shared room)</option>
@@ -485,22 +485,22 @@ export default function CreateClaimPage() {
               </FormField>
 
               <div className="grid grid-cols-2 gap-4">
-                <FormField label="Department" required>
+                <FormField label="Department">
                   <input
                     value={formData.departmentName}
                     onChange={(e) => updateForm("departmentName", e.target.value)}
                     placeholder="e.g., Orthopedics"
                     className="input"
-                    required
+                   
                   />
                 </FormField>
-                <FormField label="Attending Doctor" required>
+                <FormField label="Attending Doctor">
                   <input
                     value={formData.attendingDoctor}
                     onChange={(e) => updateForm("attendingDoctor", e.target.value)}
                     placeholder="e.g., Dr. Sarah Mitchell"
                     className="input"
-                    required
+                   
                   />
                 </FormField>
               </div>
@@ -514,25 +514,25 @@ export default function CreateClaimPage() {
               <h2 className="text-lg font-semibold text-slate-900">Insurance & Billing</h2>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <FormField label="Insurance Company" required>
+              <FormField label="Insurance Company">
                 <input
                   value={formData.insuranceCompany}
                   onChange={(e) => updateForm("insuranceCompany", e.target.value)}
                   placeholder="e.g., ABC Health Insurance"
                   className="input"
-                  required
+                 
                 />
               </FormField>
-              <FormField label="Policy Number" required>
+              <FormField label="Policy Number">
                 <input
                   value={formData.policyNumber}
                   onChange={(e) => updateForm("policyNumber", e.target.value)}
                   placeholder="e.g., ABC-POL-123456"
                   className="input"
-                  required
+                 
                 />
               </FormField>
-              <FormField label="Estimated Total Cost ($)" required className="col-span-2">
+              <FormField label="Estimated Total Cost ($)" className="col-span-2">
                 <input
                   type="number"
                   step="0.01"
@@ -540,7 +540,7 @@ export default function CreateClaimPage() {
                   onChange={(e) => updateForm("estimatedTotalCost", e.target.value)}
                   placeholder="e.g., 48000"
                   className="input"
-                  required
+                 
                 />
                 <p className="mt-1 text-xs text-slate-500">AI will break this down into room, procedure, medication, and other charges</p>
               </FormField>
@@ -811,11 +811,11 @@ function StepIndicator({ number, label, active, completed }: { number: number; l
   );
 }
 
-function FormField({ label, required, className = "", children }: { label: string; required?: boolean; className?: string; children: React.ReactNode }) {
+function FormField({ label, className = "", children }: { label: string; className?: string; children: React.ReactNode }) {
   return (
     <div className={className}>
       <label className="block text-sm font-medium text-slate-700 mb-1.5">
-        {label} {required && <span className="text-red-500">*</span>}
+        {label}
       </label>
       {children}
     </div>

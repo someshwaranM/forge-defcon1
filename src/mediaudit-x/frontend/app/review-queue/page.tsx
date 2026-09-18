@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Filter, Search, CheckCircle2, AlertCircle, Clock } from "lucide-react";
+import { Filter, Search, CheckCircle2, AlertCircle, Clock, XCircle } from "lucide-react";
 import StatusBadge from "../components/StatusBadge";
 import Badge from "../components/ui/Badge";
 import EmptyState from "../components/ui/EmptyState";
@@ -28,7 +28,7 @@ type Claim = {
   procedure_name?: string;
 };
 
-const STATUS_FILTERS = ["All", "PENDING", "REQUEST_INFO"] as const;
+const STATUS_FILTERS = ["All", "PENDING", "APPROVED", "DENIED", "REQUEST_INFO"] as const;
 const AI_FILTERS = ["All AI Recommendations", "Approve Recommended", "Deny Recommended", "Needs Review"] as const;
 
 export default function ReviewQueuePage() {
@@ -44,12 +44,8 @@ export default function ReviewQueuePage() {
       // Use demo data from localStorage
       const demoClaims = DemoDataManager.getAllClaims();
 
-      // Filter to show only claims that need review (not already approved/denied)
-      const reviewable = demoClaims.filter((c) =>
-        c.status === "PENDING" || c.status === "REQUEST_INFO"
-      );
-
-      setClaims(reviewable as any[]);
+      // Show all claims (including approved and denied)
+      setClaims(demoClaims as any[]);
       setLoading(false);
     } else {
       // Use real API. A failed request previously fell back to
@@ -62,11 +58,8 @@ export default function ReviewQueuePage() {
           return res.json();
         })
         .then((data) => {
-          // Filter to show only claims that need review (not already approved/denied)
-          const reviewable = data.filter((c: Claim) =>
-            c.status === "PENDING" || c.status === "REQUEST_INFO"
-          );
-          setClaims(reviewable);
+          // Show all claims (including approved and denied)
+          setClaims(data);
           setFetchError(null);
           setLoading(false);
         })
@@ -105,6 +98,8 @@ export default function ReviewQueuePage() {
 
   const needsReview = claims.filter((c) => c.status === "PENDING").length;
   const needsInfo = claims.filter((c) => c.status === "REQUEST_INFO").length;
+  const approved = claims.filter((c) => c.status === "APPROVED").length;
+  const denied = claims.filter((c) => c.status === "DENIED").length;
   const approveRecommended = claims.filter((c) => c.ai_recommendation === "APPROVE").length;
   const needsHumanReview = claims.filter((c) => c.ai_recommendation === "NEEDS_REVIEW").length;
 
@@ -117,30 +112,24 @@ export default function ReviewQueuePage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         <StatCard
           icon={<Clock size={18} className="text-amber-600" />}
-          label="Needs Review"
+          label="Pending Review"
           value={needsReview}
           bgColor="bg-amber-50"
         />
         <StatCard
-          icon={<AlertCircle size={18} className="text-blue-600" />}
-          label="Needs Information"
-          value={needsInfo}
-          bgColor="bg-blue-50"
-        />
-        <StatCard
           icon={<CheckCircle2 size={18} className="text-emerald-600" />}
-          label="AI: Approve Recommended"
-          value={approveRecommended}
+          label="Approved"
+          value={approved}
           bgColor="bg-emerald-50"
         />
         <StatCard
-          icon={<AlertCircle size={18} className="text-purple-600" />}
-          label="AI: Needs Human Review"
-          value={needsHumanReview}
-          bgColor="bg-purple-50"
+          icon={<XCircle size={18} className="text-red-600" />}
+          label="Denied"
+          value={denied}
+          bgColor="bg-red-50"
         />
       </div>
 
@@ -198,15 +187,22 @@ export default function ReviewQueuePage() {
         </div>
       </div>
 
+      {/* Error Message */}
+      {fetchError && (
+        <Alert variant="error" title="Could not load claims">
+          {fetchError}
+        </Alert>
+      )}
+
       {/* Claims Table */}
       <div className="card overflow-hidden">
         {loading ? (
           <LoadingSpinner message="Loading review queue..." />
         ) : fetchError ? (
           <EmptyState
-            icon={<AlertCircle size={48} className="text-red-400" />}
-            title="Could not load claims"
-            description={fetchError}
+            icon={<AlertCircle size={48} />}
+            title="Unable to load claims"
+            description="Check the error message above for details."
           />
         ) : filtered.length === 0 ? (
           <EmptyState
