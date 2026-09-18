@@ -158,6 +158,8 @@ export default function InsuranceReviewPage() {
     );
   }
 
+  const aiRec = claim?.ai_recommendation?.status || done?.status || null;
+
   const policyEvidence = (done?.cited_evidence || []).filter((e: any) => e.source_index === "medical-policies");
   const otherEvidence = (done?.cited_evidence || []).filter((e: any) => e.source_index !== "medical-policies");
 
@@ -171,7 +173,7 @@ export default function InsuranceReviewPage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-semibold text-slate-900">Claim {claim.claim_id}</h1>
-            <StatusBadge status={claim.status} />
+            <StatusBadge status={claim.status} aiRecommendation={aiRec} />
           </div>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 text-sm text-slate-600">
@@ -222,7 +224,7 @@ export default function InsuranceReviewPage() {
           <div>
             <div className="text-xs uppercase tracking-wide text-slate-400">Status</div>
             <div className="mt-0.5">
-              <StatusBadge status={claim.status} />
+              <StatusBadge status={claim.status} aiRecommendation={aiRec} />
             </div>
           </div>
         </div>
@@ -324,7 +326,7 @@ export default function InsuranceReviewPage() {
                 <div className="col-span-2">
                   <ReviewerDecisionPanel
                     claimId={claim.claim_id}
-                    aiRecommendation={done.status}
+                    aiRecommendation={aiRec}
                     currentStatus={claim.status}
                     reviewerComment={claim.reviewer_comment}
                     onDecisionSubmit={async (decision, comment) => {
@@ -340,7 +342,6 @@ export default function InsuranceReviewPage() {
                         throw new Error(`Failed to submit decision (${res.status})`);
                       }
                       const result = await res.json();
-                      setDone((prev) => (prev ? { ...prev, status: result.status } : prev));
                       setClaim((prev: any) => (prev ? { ...prev, status: result.status, reviewer_comment: comment } : prev));
                     }}
                   />

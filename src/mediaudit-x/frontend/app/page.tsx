@@ -23,6 +23,7 @@ type Claim = {
   cpt_code: string;
   claim_amount: number;
   status: string;
+  ai_recommendation?: { status: string };
 };
 
 export default function HomePage() {
@@ -128,12 +129,12 @@ export default function HomePage() {
                     <td className="py-2.5 text-slate-500">{claim.patient_id}</td>
                     <td className="py-2.5 text-slate-500">{claim.cpt_code}</td>
                     <td className="py-2.5">
-                      <StatusBadge status={claim.status} />
+                      <StatusBadge status={claim.status} aiRecommendation={claim.ai_recommendation?.status} />
                     </td>
                     <td className="py-2.5 text-slate-700">${claim.claim_amount?.toLocaleString()}</td>
                     <td className="py-2.5 text-right">
                       <Link
-                        href={role === "hospital" ? `/hospital/claims/${claim.claim_id}` : `/claims/${claim.claim_id}`}
+                        href={role === "hospital" ? `/hospital/claims/${claim.claim_id}` : `/insurance/review/${claim.claim_id}`}
                         className="text-xs font-medium text-blue-600 hover:underline"
                       >
                         View
