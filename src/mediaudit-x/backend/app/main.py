@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.indices.create_indices import ensure_indices
 from app.pipeline.ingestion.storage import upload_root
-from app.routers import claims, adjudication, intake, ocr, patients
+from app.routers import claims, adjudication, intake, ocr, patients, audit
 
 UPLOAD_DIR = upload_root()
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -30,6 +30,7 @@ app.include_router(claims.router)
 app.include_router(ocr.router)
 app.include_router(adjudication.router)
 app.include_router(patients.router)
+app.include_router(audit.router)
 
 # Serves files stored by the ingestion stage. Local disk, not an object
 # store -- see app/pipeline/ingestion/storage.py for the swap-to-S3 note.
