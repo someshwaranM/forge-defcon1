@@ -20,7 +20,7 @@ html, body {
 .badge-info { @apply bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-600/20; }
 
 .card {
-  @apply rounded-xl border border-slate-200 bg-white shadow-card;
+  @apply rounded-xl border border-slate-200 bg-white shadow-card transition-shadow duration-200;
 }
 
 .input {

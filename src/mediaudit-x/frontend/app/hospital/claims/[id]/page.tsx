@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, FileText, Calendar, User, Building2, DollarSign, CheckCircle, Clock } from "lucide-react";
 import StatusBadge from "../../../components/StatusBadge";
+import LoadingSpinner from "../../../components/ui/LoadingSpinner";
 import DocumentsPanel from "../../../components/DocumentsPanel";
 
 type Review = {
@@ -64,11 +65,8 @@ export default function HospitalClaimViewPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-slate-600">Loading claim details...</p>
-        </div>
+      <div className="flex min-h-[400px] items-center justify-center">
+        <LoadingSpinner size={32} message="Loading claim details..." />
       </div>
     );
   }
