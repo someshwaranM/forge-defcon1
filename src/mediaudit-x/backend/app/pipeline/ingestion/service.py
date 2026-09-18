@@ -17,6 +17,7 @@ chain never describes a document that was rolled back.
 import uuid
 from datetime import datetime, timezone
 
+from app.indices.names import CLAIM_FILES
 from app.pipeline.ingestion.checks import inspect_file
 from app.pipeline.ingestion.models import (
     DOC_TYPES,
@@ -82,7 +83,7 @@ class IngestionService:
         }
         es_id = self.repo.create_claim(claim)
         try:
-            docs = self._commit(claim, es_id, accepted, doc_type, meta.submitted_by)
+            docs = self._commit(claim, CLAIM_FILES, es_id, accepted, doc_type, meta.submitted_by)
         except Exception:
             self.repo.delete_claim(es_id)
             raise
@@ -109,7 +110,7 @@ class IngestionService:
         hit = self.repo.find_claim(claim_id)
         if not hit:
             raise IngestionError(404, "claim_not_found", "Claim not found.")
-        es_id, claim = hit["_id"], hit["_source"]
+        index, es_id, claim = hit["_index"], hit["_id"], hit["_source"]
 
         status = claim.get("status")
         if status not in UPLOADABLE_STATUSES:
@@ -127,7 +128,7 @@ class IngestionService:
         reopened = status == "REQUEST_INFO"
         if reopened:
             claim["status"] = "DRAFT"
-        docs = self._commit(claim, es_id, accepted, doc_type, uploaded_by)
+        docs = self._commit(claim, index, es_id, accepted, doc_type, uploaded_by)
 
         if reopened:
             self.repo.record_event(claim_id, "STATUS_CHANGED", {
@@ -196,7 +197,9 @@ class IngestionService:
 
     # ── commit ────────────────────────────────────────────────────────
 
-    def _commit(self, claim: dict, es_id: str, accepted: Screened, doc_type: str, uploaded_by: str) -> list[dict]:
+    def _commit(
+        self, claim: dict, index: str, es_id: str, accepted: Screened, doc_type: str, uploaded_by: str
+    ) -> list[dict]:
         claim_id = claim["claim_id"]
         stored_uris: list[str] = []
         indexed_ids: list[str] = []
@@ -233,7 +236,7 @@ class IngestionService:
                 {"doc_id": d["doc_id"], "doc_type": d["doc_type"], "source_uri": d["source_uri"]}
                 for d in docs
             )
-            self.repo.update_claim(es_id, claim)
+            self.repo.update_claim(index, es_id, claim)
         except Exception:
             for doc_id in indexed_ids:
                 self._quietly(self.repo.delete_document, doc_id)

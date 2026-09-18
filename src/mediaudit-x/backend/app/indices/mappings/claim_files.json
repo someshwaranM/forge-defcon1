@@ -1,0 +1,25 @@
+{
+  "mappings": {
+    "properties": {
+      "claim_id":        { "type": "keyword" },
+      "patient_id":      { "type": "keyword" },
+      "payer_name":      { "type": "keyword" },
+      "cpt_code":        { "type": "keyword" },
+      "icd10_code":      { "type": "keyword" },
+      "claim_amount":    { "type": "float" },
+      "claim_type":      { "type": "keyword" },
+      "submitted_date":  { "type": "date" },
+      "status":          { "type": "keyword" },
+      "source":          { "type": "keyword" },
+      "submitted_by":    { "type": "keyword" },
+      "attached_documents": {
+        "type": "nested",
+        "properties": {
+          "doc_id":     { "type": "keyword" },
+          "doc_type":   { "type": "keyword" },
+          "source_uri": { "type": "keyword" }
+        }
+      }
+    }
+  }
+}

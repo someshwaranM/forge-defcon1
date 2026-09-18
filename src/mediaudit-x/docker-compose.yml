@@ -1,68 +1,46 @@
-# MediAudit-X local stack: Elasticsearch + backend (FastAPI) + frontend (Next.js).
+# MediAudit-X local stack: backend (FastAPI) + frontend (Next.js), using the
+# Elasticsearch configured in backend/.env (ELASTIC_URL, or
+# ELASTIC_CLOUD_ID + ELASTIC_API_KEY). No Elasticsearch container is started.
 #
-#   docker compose up --build     first run (builds images, loads sample data)
+#   docker compose up --build     first run
 #   docker compose up             later runs
-#   docker compose down           stop  (add -v to also wipe Elasticsearch data)
+#   docker compose down           stop
 #
 # UI http://localhost:3000 · API docs http://localhost:8000/docs
+#
+# If backend/.env points at an Elasticsearch running on your Mac itself,
+# use ELASTIC_URL=http://host.docker.internal:9200 (not localhost, which
+# inside a container means the container).
+#
+# Missing indices are created automatically (setup step and API startup).
+# Sample data is loaded only if the insurance-claims index is empty; set
+# SEED_SAMPLE_DATA=false in backend/.env to never load it.
 #
 # backend/app and frontend/app are mounted into the containers and both
 # servers hot-reload, so code edits show up without rebuilding. Rebuild
 # (--build) after changing requirements.txt, package.json or config files.
-#
-# Ports: override with ES_PORT / BACKEND_PORT / FRONTEND_PORT if taken,
-# e.g.  ES_PORT=9201 docker compose up. Needs Docker Compose 2.24+.
-#
-# The backend always uses the Elasticsearch container below. backend/.env
-# is still read if present (for AWS / Anthropic keys); any Elastic Cloud
-# settings in it are overridden.
+# Ports: override with BACKEND_PORT / FRONTEND_PORT if taken.
 
 name: mediaudit-x
 
 services:
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:9.2.0
-    environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-      - ES_JAVA_OPTS=-Xms1g -Xmx1g
-    ports:
-      - "${ES_PORT:-9200}:9200"
-    volumes:
-      - es-data:/usr/share/elasticsearch/data
-    healthcheck:
-      test: ["CMD-SHELL", "curl -sf 'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s' || exit 1"]
-      interval: 5s
-      timeout: 10s
-      retries: 30
-
   setup:
     build: ./backend
     command: ["sh", "./docker-setup.sh"]
-    env_file:
-      - path: ./backend/.env
-        required: false
-    environment: &backend-env
-      ELASTIC_URL: http://elasticsearch:9200
-      ELASTIC_CLOUD_ID: ""
-      ELASTIC_API_KEY: ""
-      ELASTIC_USERNAME: ""
-      ELASTIC_PASSWORD: ""
+    env_file: ./backend/.env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./backend/app:/app/app
       # Loaders resolve data/ four levels above their file, i.e. /data here.
       - ./data:/data
-    depends_on:
-      elasticsearch:
-        condition: service_healthy
 
   backend:
     build: ./backend
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
-    env_file:
-      - path: ./backend/.env
-        required: false
-    environment: *backend-env
+    env_file: ./backend/.env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     volumes:
@@ -87,5 +65,4 @@ services:
       - backend
 
 volumes:
-  es-data:
   uploads:

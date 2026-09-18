@@ -13,6 +13,8 @@ Design notes:
   status=PENDING, ready to be adjudicated through the existing
   POST /claims/{claim_id}/adjudicate flow -- no separate "upload" data
   path, this feeds the same pipeline everything else already uses.
+- Claims created by document upload live in claim-files, not here;
+  list/get read both indices (see app/indices/names.py).
 - Document upload moved to routers/intake.py (backed by
   app.pipeline.ingestion), which validates files before storing them and
   also serves POST /claims/{claim_id}/documents.
@@ -29,6 +31,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.es_client import get_es_client
+from app.indices.names import ALL_CLAIMS, INSURANCE_CLAIMS
 from app.pipeline.ingestion.models import CLAIM_ID_PATTERN
 
 router = APIRouter(prefix="/claims", tags=["claims"])
@@ -49,9 +52,10 @@ class ClaimCreate(BaseModel):
 def _find_claim(es, claim_id: str) -> dict:
     """Returns the raw ES hit ({"_id": ..., "_source": {...}}) or raises 404."""
     result = es.search(
-        index="insurance-claims",
+        index=ALL_CLAIMS,
         query={"term": {"claim_id": claim_id}},
         size=1,
+        ignore_unavailable=True,
     )
     hits = result["hits"]["hits"]
     if not hits:
@@ -62,9 +66,17 @@ def _find_claim(es, claim_id: str) -> dict:
 @router.get("")
 def list_claims(limit: int = 20):
     es = get_es_client()
-    result = es.search(index="insurance-claims", query={"match_all": {}}, size=limit)
+    # Both uploaded (claim-files) and manual/sample (insurance-claims)
+    # claims, newest first so fresh uploads show at the top.
+    result = es.search(
+        index=ALL_CLAIMS,
+        query={"match_all": {}},
+        sort=[{"submitted_date": {"order": "desc", "unmapped_type": "date"}}],
+        size=limit,
+        ignore_unavailable=True,
+    )
     return [
-        {"id": hit["_id"], **hit["_source"]} for hit in result["hits"]["hits"]
+        {"id": hit["_id"], "index": hit["_index"], **hit["_source"]} for hit in result["hits"]["hits"]
     ]
 
 
@@ -72,7 +84,7 @@ def list_claims(limit: int = 20):
 def get_claim(claim_id: str):
     es = get_es_client()
     hit = _find_claim(es, claim_id)
-    return {"id": hit["_id"], **hit["_source"]}
+    return {"id": hit["_id"], "index": hit["_index"], **hit["_source"]}
 
 
 @router.post("", status_code=201)
@@ -82,9 +94,10 @@ def create_claim(claim: ClaimCreate):
     claim_id = claim.claim_id or f"CLM-{uuid.uuid4().hex[:8].upper()}"
 
     existing = es.search(
-        index="insurance-claims",
+        index=ALL_CLAIMS,
         query={"term": {"claim_id": claim_id}},
         size=1,
+        ignore_unavailable=True,
     )
     if existing["hits"]["hits"]:
         raise HTTPException(status_code=409, detail=f"Claim {claim_id} already exists")
@@ -102,7 +115,7 @@ def create_claim(claim: ClaimCreate):
         "source": "manual",
         "attached_documents": [],
     }
-    result = es.index(index="insurance-claims", document=doc)
-    es.indices.refresh(index="insurance-claims")
+    result = es.index(index=INSURANCE_CLAIMS, document=doc)
+    es.indices.refresh(index=INSURANCE_CLAIMS)
 
     return {"id": result["_id"], **doc}

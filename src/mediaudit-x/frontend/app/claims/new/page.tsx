@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Loader2, UploadCloud, X } from "lucide-react";
+import { ArrowLeft, CheckCircle2, FileText, Loader2, UploadCloud, X } from "lucide-react";
 import { RejectedList, formatBytes, type Rejected } from "../../components/DocumentsPanel";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
@@ -31,6 +31,24 @@ type FormState = {
   doc_type: string;
 };
 
+type StoredDocument = {
+  doc_id: string;
+  original_filename: string;
+  doc_type: string;
+  detected_type: string;
+  size_bytes: number;
+  page_count: number | null;
+  sha256: string;
+  source_uri: string;
+  warnings: string[];
+};
+
+type IntakeResult = {
+  claim: { claim_id: string; status: string; patient_id: string; payer_name: string };
+  accepted: StoredDocument[];
+  rejected: Rejected[];
+};
+
 const EMPTY: FormState = {
   claim_id: "",
   patient_id: "",
@@ -43,17 +61,19 @@ export default function NewClaimPage() {
   const router = useRouter();
   const [form, setForm] = useState<FormState>(EMPTY);
   const [files, setFiles] = useState<File[]>([]);
+  const [dragging, setDragging] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rejected, setRejected] = useState<Rejected[]>([]);
-  const [createdClaimId, setCreatedClaimId] = useState<string | null>(null);
+  const [result, setResult] = useState<IntakeResult | null>(null);
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [key]: value }));
   }
 
   function addFiles(list: FileList | null) {
-    if (!list) return;
+    if (!list || list.length === 0) return;
+    setError(null);
     setFiles((prev) => [...prev, ...Array.from(list)]);
   }
 
@@ -62,46 +82,47 @@ export default function NewClaimPage() {
     setError(null);
     setRejected([]);
 
-    if (!form.patient_id || !form.payer_name) {
+    if (!form.patient_id.trim() || !form.payer_name.trim()) {
       setError("Patient ID and payer are required.");
       return;
     }
     if (files.length === 0) {
-      setError("Upload at least one document.");
+      setError("Attach at least one document first.");
       return;
     }
 
     const fd = new FormData();
-    fd.append("patient_id", form.patient_id);
-    fd.append("payer_name", form.payer_name);
+    fd.append("patient_id", form.patient_id.trim());
+    fd.append("payer_name", form.payer_name.trim());
     fd.append("claim_type", form.claim_type);
     fd.append("doc_type", form.doc_type);
-    if (form.claim_id) fd.append("claim_id", form.claim_id);
+    if (form.claim_id.trim()) fd.append("claim_id", form.claim_id.trim());
     for (const file of files) fd.append("files", file);
 
     setSubmitting(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/claims/intake`, { method: "POST", body: fd });
+      let res: Response;
+      try {
+        res = await fetch(`${API_BASE_URL}/claims/intake`, { method: "POST", body: fd });
+      } catch {
+        throw new Error(`Could not reach the API at ${API_BASE_URL}. Is the backend running?`);
+      }
       const body = await res.json().catch(() => ({}));
 
       if (!res.ok) {
         setRejected(body.rejected || []);
         throw new Error(typeof body.detail === "string" ? body.detail : `Upload failed (${res.status})`);
       }
-
-      const claimId: string = body.claim.claim_id;
-      if (body.rejected?.length) {
-        // Some files were refused: show why before moving on.
-        setRejected(body.rejected);
-        setCreatedClaimId(claimId);
-        setSubmitting(false);
-        return;
-      }
-      router.push(`/claims/${claimId}`);
+      setResult(body as IntakeResult);
     } catch (err: any) {
       setError(err.message || "Something went wrong.");
+    } finally {
       setSubmitting(false);
     }
+  }
+
+  if (result) {
+    return <UploadSummary result={result} onOpen={() => router.push(`/claims/${result.claim.claim_id}`)} />;
   }
 
   return (
@@ -171,20 +192,39 @@ export default function NewClaimPage() {
               ))}
             </select>
           </div>
-          <label className="flex cursor-pointer flex-col items-center gap-1.5 rounded-lg border border-dashed border-slate-300 px-4 py-6 text-center hover:border-blue-300 hover:bg-blue-50/40">
+
+          <div
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragging(true);
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragging(false);
+              addFiles(e.dataTransfer.files);
+            }}
+            className={`flex flex-col items-center gap-2 rounded-lg border border-dashed px-4 py-6 text-center ${
+              dragging ? "border-blue-400 bg-blue-50" : "border-slate-300"
+            }`}
+          >
             <UploadCloud size={20} className="text-slate-400" />
-            <span className="text-sm text-slate-500">Click to attach files</span>
-            <input
-              type="file"
-              multiple
-              accept={ACCEPT}
-              className="hidden"
-              onChange={(e) => {
-                addFiles(e.target.files);
-                e.target.value = "";
-              }}
-            />
-          </label>
+            <span className="text-sm text-slate-500">Drag files here, or</span>
+            <label className="cursor-pointer rounded-md bg-white px-3 py-1.5 text-sm font-medium text-blue-600 ring-1 ring-inset ring-blue-200 hover:bg-blue-50">
+              Choose files
+              <input
+                type="file"
+                multiple
+                accept={ACCEPT}
+                className="sr-only"
+                onChange={(e) => {
+                  addFiles(e.target.files);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+          </div>
+
           {files.length > 0 && (
             <ul className="mt-2 space-y-1">
               {files.map((f, i) => (
@@ -214,31 +254,90 @@ export default function NewClaimPage() {
 
         {rejected.length > 0 && <RejectedList rejected={rejected} />}
 
-        {createdClaimId ? (
-          <button
-            type="button"
-            onClick={() => router.push(`/claims/${createdClaimId}`)}
-            className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
-          >
-            Claim {createdClaimId} created — continue
-          </button>
-        ) : (
-          <button
-            type="submit"
-            disabled={submitting}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
-          >
-            {submitting ? (
-              <>
-                <Loader2 size={15} className="animate-spin" />
-                Uploading documents...
-              </>
-            ) : (
-              "Upload documents & create claim"
-            )}
-          </button>
-        )}
+        <button
+          type="submit"
+          disabled={submitting || files.length === 0}
+          className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {submitting ? (
+            <>
+              <Loader2 size={15} className="animate-spin" />
+              Uploading {files.length} document{files.length > 1 ? "s" : ""}...
+            </>
+          ) : files.length === 0 ? (
+            "Attach documents to continue"
+          ) : (
+            `Upload ${files.length} document${files.length > 1 ? "s" : ""} & create claim`
+          )}
+        </button>
       </form>
+    </div>
+  );
+}
+
+/** What was stored: the claim record, and one record per accepted file. */
+function UploadSummary({ result, onOpen }: { result: IntakeResult; onOpen: () => void }) {
+  const { claim, accepted, rejected } = result;
+  return (
+    <div className="mx-auto max-w-3xl space-y-5">
+      <div className="card p-6">
+        <div className="flex items-center gap-2 text-emerald-700">
+          <CheckCircle2 size={18} />
+          <h1 className="text-lg font-semibold">Claim {claim.claim_id} created</h1>
+        </div>
+        <dl className="mt-3 grid grid-cols-4 gap-4 text-sm">
+          <Info label="Claim ID" value={claim.claim_id} />
+          <Info label="Status" value={claim.status} />
+          <Info label="Patient" value={claim.patient_id} />
+          <Info label="Payer" value={claim.payer_name} />
+        </dl>
+      </div>
+
+      <div className="card p-6">
+        <h2 className="mb-3 text-sm font-semibold text-slate-800">
+          {accepted.length} document{accepted.length === 1 ? "" : "s"} stored
+        </h2>
+        <ul className="space-y-3">
+          {accepted.map((d) => (
+            <li key={d.doc_id} className="rounded-lg border border-slate-100 p-3 text-sm">
+              <div className="flex items-center gap-2 font-medium text-slate-800">
+                <FileText size={15} className="text-slate-400" />
+                {d.original_filename}
+              </div>
+              <dl className="mt-2 grid grid-cols-3 gap-x-4 gap-y-2 text-xs">
+                <Info label="Document ID" value={d.doc_id} />
+                <Info label="Type" value={`${d.doc_type.replace(/_/g, " ")} · ${d.detected_type.toUpperCase()}`} />
+                <Info label="Pages · Size" value={`${d.page_count ?? "?"} · ${formatBytes(d.size_bytes)}`} />
+                <div className="col-span-3">
+                  <Info label="Stored at" value={d.source_uri} mono />
+                </div>
+                <div className="col-span-3">
+                  <Info label="SHA-256 fingerprint" value={d.sha256} mono />
+                </div>
+              </dl>
+              {d.warnings?.length > 0 && <div className="mt-2 text-xs text-amber-600">{d.warnings.join(", ")}</div>}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {rejected.length > 0 && <RejectedList rejected={rejected} />}
+
+      <button
+        onClick={onOpen}
+        className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
+      >
+        Open claim {claim.claim_id}
+      </button>
+    </div>
+  );
+}
+
+function Info({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-[11px] uppercase tracking-wide text-slate-400">{label}</dt>
+      <dd className={`mt-0.5 break-all text-slate-800 ${mono ? "font-mono text-xs" : "font-medium"}`}>{value}</dd>
     </div>
   );
 }

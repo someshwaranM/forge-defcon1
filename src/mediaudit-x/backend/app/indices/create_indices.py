@@ -42,5 +42,21 @@ def create_all_indices() -> None:
             print(f"  - {name}")
 
 
+def ensure_indices() -> list[str]:
+    """
+    Creates any index from mappings/ that doesn't exist yet and leaves
+    existing ones untouched. Called on API startup so a fresh cluster
+    works without running this script first. Returns the names created.
+    """
+    es = get_es_client()
+    created = []
+    for mapping_file in sorted(MAPPINGS_DIR.glob("*.json")):
+        index_name = index_name_from_filename(mapping_file.name)
+        if not es.indices.exists(index=index_name):
+            es.indices.create(index=index_name, body=json.loads(mapping_file.read_text()))
+            created.append(index_name)
+    return created
+
+
 if __name__ == "__main__":
     create_all_indices()
