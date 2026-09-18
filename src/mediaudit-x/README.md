@@ -112,6 +112,26 @@ source, rather than left to LLM inference alone.
 - **Elastic Agent Builder vs. the current hand-rolled Claude loop** is
   still undecided.
 - **No Elastic webhook/email action wired up yet.**
+- **OCR needs the Tesseract binary installed separately — it is not in
+  requirements.txt and cannot be, since it isn't a Python package.**
+  `pytesseract` (in requirements.txt) is only a wrapper that shells out to
+  a `tesseract` executable. `pip install -r requirements.txt` alone will
+  not give you working OCR on scanned pages/images:
+  - Windows: `winget install UB-Mannheim.TesseractOCR`
+  - macOS: `brew install tesseract`
+  - Linux: `apt-get install tesseract-ocr`
+
+  If it's missing, nothing crashes — `app/ocr/extract.py` degrades to
+  `engine: "failed"` with empty text rather than guessing — but scanned
+  documents/images will silently produce no extracted text until it's
+  installed. This also applies to wherever the backend eventually gets
+  deployed (a container image, a VM, etc.): Elasticsearch Serverless is
+  only the search/data layer and never runs this Python app, so whatever
+  environment does run it needs the same OS-level `tesseract-ocr` package
+  baked in, in addition to `pip install -r requirements.txt`. There's no
+  Dockerfile in this repo yet; when one is added, it needs an explicit
+  `apt-get install -y tesseract-ocr` layer or OCR will silently stop
+  working in that environment too.
 
 ## Quickstart — Docker (recommended)
 
@@ -157,6 +177,12 @@ source venv/bin/activate          # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env              # fill in Elastic + AWS/Anthropic credentials
 ```
+
+Also install the Tesseract OCR binary separately (needed for scanned
+documents/images — see "Known limitations" below for why `pip install`
+alone doesn't cover this): `winget install UB-Mannheim.TesseractOCR`
+(Windows), `brew install tesseract` (macOS), or `apt-get install
+tesseract-ocr` (Linux).
 
 ### 2. Create indices
 
