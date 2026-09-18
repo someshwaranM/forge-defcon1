@@ -47,12 +47,26 @@ def _make_llm_client():
     Returns (client, model_id) for whichever provider is configured.
 
     Default is AWS Bedrock (settings.llm_provider="bedrock") -- constructs
-    anthropic.AnthropicBedrock, which signs requests with boto3/botocore
-    under the hood. If aws_access_key_id/aws_secret_access_key are set in
-    .env they're passed through explicitly; otherwise None is passed and
-    boto3's own default credential chain (env vars, ~/.aws/credentials, an
-    IAM role, SSO) resolves them at call time -- same pattern as
-    AnthropicBedrock's own defaults.
+    anthropic.AnthropicBedrock, which authenticates one of two ways:
+
+    1. Bedrock API key (bearer token) -- if settings.aws_bearer_token_bedrock
+       is set (AWS's newer ABSK-prefixed long-lived key, from Console ->
+       Bedrock -> API keys, or CreateServiceSpecificCredential). ADDED
+       (18 Sept): requires anthropic>=0.88.0 (bumped in requirements.txt --
+       0.34.2 predates this and only ever SigV4-signs, which rejects an
+       ABSK key with a confusing "security token...invalid" 403 that has
+       nothing to do with session tokens). The SDK reads this from the
+       AWS_BEARER_TOKEN_BEDROCK env var, so it's set there explicitly
+       (pydantic-settings loads .env into this process's Settings object,
+       not into os.environ, so this has to be done by hand) and
+       aws_access_key/aws_secret_key/aws_session_token are left unset --
+       passing explicit (even blank) values for those forces the SigV4
+       path instead and the bearer token is ignored.
+    2. Classic SigV4 (aws_access_key_id/aws_secret_access_key pair) --
+       used only if no bearer token is configured. If those are also
+       unset, None is passed through and boto3's own default credential
+       chain (env vars, ~/.aws/credentials, an IAM role, SSO) resolves
+       them at call time.
 
     Falls back to the direct Anthropic API only if llm_provider is
     explicitly set to "anthropic" in .env (e.g. for local dev without
@@ -62,6 +76,12 @@ def _make_llm_client():
         if not settings.anthropic_api_key:
             return None, None
         return anthropic.Anthropic(api_key=settings.anthropic_api_key), settings.anthropic_model
+
+    if settings.aws_bearer_token_bedrock:
+        import os
+        os.environ["AWS_BEARER_TOKEN_BEDROCK"] = settings.aws_bearer_token_bedrock
+        client = anthropic.AnthropicBedrock(aws_region=settings.aws_region)
+        return client, settings.bedrock_model_id
 
     client = anthropic.AnthropicBedrock(
         aws_access_key=settings.aws_access_key_id,
@@ -576,6 +596,17 @@ async def adjudicate_claim(claim: dict):
         "generated_letter": letter,
         "decided_at": datetime.now(timezone.utc).isoformat(),
         "decided_by": "mediaudit-x-agent",
+        # ADDED (18 Sept): matched_policy/trajectory_result aren't in the
+        # original adjudication-results mapping (indices/mappings/
+        # adjudication_results.json only specs 7 fields), but without
+        # them GET /claims/{id}/adjudications can't restore the Policy &
+        # Guidelines / Clinical History tabs after a page reload -- those
+        # previously only ever existed in the live SSE "done" event, lost
+        # the moment the browser tab was closed. No dynamic:strict is set
+        # on this index, so ES maps these as ordinary dynamic object
+        # fields; nothing else in the schema changes.
+        "matched_policy": matched_policy,
+        "trajectory_result": trajectory_result,
     }
     try:
         es.index(index="adjudication-results", document=adjudication_doc)
@@ -592,6 +623,30 @@ async def adjudicate_claim(claim: dict):
         "step": "audit_ledger",
         "detail": f"Ledger entry {ledger_entry['ledger_id']} written (seq {ledger_entry['sequence_number']}, hash {ledger_entry['record_hash'][:12]}...)",
     }
+
+    # FIXED (18 Sept): this function used to only write adjudication-results
+    # and audit-ledger, never the claim's own `status` field in
+    # insurance-claims -- so the decision only ever existed in the SSE
+    # response the frontend happened to be holding in memory at that
+    # moment. Refreshing the page, or reopening the claim later, showed
+    # the original PENDING status forever, as if adjudication had never
+    # run. update_by_query (rather than an es.get+es.index round trip) so
+    # this doesn't need to know the document's internal ES _id -- claims
+    # are indexed without an explicit id (see routers/claims.py), only
+    # queryable/updatable by the claim_id term.
+    try:
+        update_result = es.update_by_query(
+            index="insurance-claims",
+            query={"term": {"claim_id": claim.get("claim_id", "")}},
+            script={"source": "ctx._source.status = params.status", "params": {"status": status}},
+            refresh=True,
+        )
+        yield "reasoning_step", {
+            "step": "claim_status_updated",
+            "detail": f"insurance-claims status set to {status} ({update_result.get('updated', 0)} document(s) updated).",
+        }
+    except Exception as e:  # noqa: BLE001
+        yield "reasoning_step", {"step": "write_error", "detail": f"Could not update claim status in insurance-claims: {e}"}
 
     yield "done", {
         "status": status,
