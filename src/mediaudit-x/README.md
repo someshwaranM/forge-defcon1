@@ -215,6 +215,40 @@ API docs: http://localhost:8000/docs
 cd backend && python -m pytest tests/ -v
 ```
 
+### Running the backend in Docker
+
+```bash
+cd backend
+docker build -t mediaudit-x-backend .
+docker run --rm -p 8000:8000 --env-file .env mediaudit-x-backend
+```
+
+- The image bakes in the Tesseract OCR binary (`apt-get install
+  tesseract-ocr`) so OCR works out of the box in the container, unlike a
+  bare `pip install` (see "Known limitations" above).
+- `--env-file .env` passes your Elastic/AWS/Anthropic credentials as
+  container env vars; the `.env` file itself is never copied into the
+  image (`.dockerignore` excludes it).
+- `/app/uploads` (where `POST /claims/{id}/documents` writes files) is
+  declared as a volume; mount one (`-v mediaudit-uploads:/app/uploads`)
+  if you want uploads to survive a container restart -- otherwise they're
+  as ephemeral as local-disk storage already is today.
+- The ingestion scripts (`load_sample_data.py` etc.) are **not** run as
+  part of the image's own startup, and `data/` is not copied into it —
+  run them locally against your target cluster instead (step 3 above).
+  If you do want to run one inside the container, note that each script
+  resolves `data/` via four `.parent` calls up from its own file, which
+  inside this image lands at the container's filesystem root, not
+  `/app/data` — e.g. `docker run --rm --env-file .env -v
+  "$(pwd)/../data:/data" mediaudit-x-backend python -m
+  app.ingestion.load_sample_data`. This mirrors the local repo layout
+  (`backend/app/ingestion/... -> backend -> mediaudit-x/data`) rather
+  than being a deliberately chosen container path -- worth revisiting if
+  it's confusing in practice.
+- Not yet done: no docker-compose, no frontend Dockerfile, no CI image
+  build. Elasticsearch itself is Serverless and is never containerized
+  here.
+
 Requires steps 2-3 to have run first against the same cluster.
 
 ### 6. Frontend
