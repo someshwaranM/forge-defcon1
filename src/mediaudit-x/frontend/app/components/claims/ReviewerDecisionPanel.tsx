@@ -9,18 +9,26 @@ import Alert from "../ui/Alert";
 interface ReviewerDecisionPanelProps {
   claimId: string;
   aiRecommendation?: string;
+  currentStatus?: string;
+  reviewerComment?: string;
   onDecisionSubmit?: (decision: "APPROVED" | "DENIED" | "REQUEST_INFO", comment: string) => void | Promise<void>;
 }
 
 export default function ReviewerDecisionPanel({
   claimId,
   aiRecommendation,
+  currentStatus,
+  reviewerComment,
   onDecisionSubmit,
 }: ReviewerDecisionPanelProps) {
   const [selectedDecision, setSelectedDecision] = useState<"APPROVED" | "DENIED" | "REQUEST_INFO" | null>(null);
   const [comment, setComment] = useState("");
   const [showConfirm, setShowConfirm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  // Check if a final decision has been made
+  const isDecisionMade = currentStatus === "APPROVED" || currentStatus === "DENIED";
+  const finalDecision = isDecisionMade ? currentStatus : null;
 
   const handleSubmit = () => {
     if (!selectedDecision || !comment.trim()) return;
@@ -45,6 +53,75 @@ export default function ReviewerDecisionPanel({
     }
   };
 
+  // If decision is already made, show read-only summary
+  if (isDecisionMade) {
+    return (
+      <div className="card p-6 border-2 border-slate-200">
+        <div className="flex items-start gap-4">
+          <div className={`flex-shrink-0 w-14 h-14 rounded-full flex items-center justify-center ${
+            finalDecision === "APPROVED" ? "bg-emerald-100" : "bg-red-100"
+          }`}>
+            {finalDecision === "APPROVED" ? (
+              <CheckCircle size={28} className="text-emerald-600" />
+            ) : (
+              <XCircle size={28} className="text-red-600" />
+            )}
+          </div>
+          <div className="flex-1">
+            <div className="flex items-center gap-3 mb-1">
+              <h2 className="text-lg font-semibold text-slate-900">
+                {finalDecision === "APPROVED" ? "Claim Approved" : "Claim Denied"}
+              </h2>
+              <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                finalDecision === "APPROVED"
+                  ? "bg-emerald-100 text-emerald-700"
+                  : "bg-red-100 text-red-700"
+              }`}>
+                {finalDecision}
+              </span>
+            </div>
+            <p className="text-sm text-slate-600 mb-4">
+              Final decision recorded. This claim has been {finalDecision === "APPROVED" ? "approved" : "denied"} by the reviewer.
+            </p>
+
+            {/* Decision Details Grid */}
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div className="bg-slate-50 rounded-lg p-4">
+                <div className="text-xs font-medium text-slate-500 mb-1">AI Recommendation</div>
+                <div className="text-sm font-semibold text-slate-800">
+                  {aiRecommendation || "N/A"}
+                </div>
+              </div>
+              <div className="bg-slate-50 rounded-lg p-4">
+                <div className="text-xs font-medium text-slate-500 mb-1">Final Decision</div>
+                <div className={`text-sm font-semibold ${
+                  finalDecision === "APPROVED" ? "text-emerald-700" : "text-red-700"
+                }`}>
+                  {finalDecision}
+                </div>
+              </div>
+            </div>
+
+            {/* Reviewer Comment */}
+            {reviewerComment && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="text-xs font-medium text-blue-700 mb-2">Reviewer Comment:</div>
+                <div className="text-sm text-slate-700 leading-relaxed">{reviewerComment}</div>
+              </div>
+            )}
+
+            {/* Audit Trail Note */}
+            <div className="mt-4 pt-4 border-t border-slate-200">
+              <p className="text-xs text-slate-500">
+                ✓ Decision recorded in audit trail • No further changes allowed
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <div className="card p-6">
@@ -55,9 +132,14 @@ export default function ReviewerDecisionPanel({
 
         {/* AI Recommendation Display */}
         {aiRecommendation && (
-          <div className="mb-5 p-3 bg-slate-50 rounded-lg border border-slate-200">
-            <div className="text-xs font-medium text-slate-600 mb-1">AI Recommendation:</div>
-            <div className="text-sm font-semibold text-slate-800">{aiRecommendation}</div>
+          <div className="mb-5 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                <span className="text-blue-600 font-semibold text-sm">AI</span>
+              </div>
+              <div className="text-xs font-semibold text-blue-700">AI Recommendation</div>
+            </div>
+            <div className="text-sm font-semibold text-slate-800 ml-10">{aiRecommendation}</div>
           </div>
         )}
 

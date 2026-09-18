@@ -18,10 +18,14 @@ auth, which Serverless rejects. Put the project's endpoint URL in
 ELASTIC_URL and its API key in ELASTIC_API_KEY (leave ELASTIC_CLOUD_ID
 blank) to connect to Serverless with this client.
 """
+import logging
+
 from elasticsearch import Elasticsearch
 from functools import lru_cache
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 def _clean(value: str | None) -> str | None:
@@ -45,20 +49,33 @@ def get_es_client() -> Elasticsearch:
         cloud_id = None
 
     if cloud_id and api_key:
-        return Elasticsearch(cloud_id=cloud_id, api_key=api_key)
+        logger.info("Connecting to Elasticsearch via cloud_id + api_key")
+        client = Elasticsearch(cloud_id=cloud_id, api_key=api_key)
+        logger.info("Elasticsearch client ready: %s", client.info().get("cluster_name"))
+        return client
 
     if url and api_key:
         # Elastic Cloud Serverless (or any URL-based cluster using API
         # key auth instead of basic auth).
-        return Elasticsearch(url, api_key=api_key)
+        logger.info("Connecting to Elasticsearch at %s via api_key", url)
+        client = Elasticsearch(url, api_key=api_key)
+        logger.info("Elasticsearch client ready: %s", client.info().get("cluster_name"))
+        return client
 
     if url:
         auth = None
         username, password = _clean(settings.elastic_username), _clean(settings.elastic_password)
         if username and password:
             auth = (username, password)
-        return Elasticsearch(url, basic_auth=auth)
+        logger.info(
+            "Connecting to Elasticsearch at %s via %s",
+            url, "basic_auth" if auth else "no auth",
+        )
+        client = Elasticsearch(url, basic_auth=auth)
+        logger.info("Elasticsearch client ready: %s", client.info().get("cluster_name"))
+        return client
 
+    logger.error("No Elasticsearch connection configured -- see .env.example")
     raise RuntimeError(
         "No Elasticsearch connection configured. Set either "
         "ELASTIC_CLOUD_ID + ELASTIC_API_KEY (classic Elastic Cloud), or "

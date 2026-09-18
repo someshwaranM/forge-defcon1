@@ -149,6 +149,7 @@ def get_latest_adjudication(claim_id: str):
         "decided_at": doc.get("decided_at"),
         "matched_policy": doc.get("matched_policy"),
         "trajectory_result": doc.get("trajectory_result"),
+        "evidence_result": doc.get("evidence_result"),
         # Present on human reviewer decisions (decision_type=HUMAN_REVIEW);
         # the hospital claim view falls back to these for older claims.
         "decision_type": doc.get("decision_type"),
