@@ -7,6 +7,7 @@ export type UserRole = "hospital" | "insurance";
 interface RoleContextType {
   role: UserRole | null;
   setRole: (role: UserRole) => void;
+  logout: () => void;
   userName: string;
   userTitle: string;
   isAuthenticated: boolean;
@@ -26,8 +27,13 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     setIsAuthenticated(true);
   };
 
+  const logout = () => {
+    setRole(null);
+    setIsAuthenticated(false);
+  };
+
   return (
-    <RoleContext.Provider value={{ role, setRole: setRoleWithAuth, userName, userTitle, isAuthenticated }}>
+    <RoleContext.Provider value={{ role, setRole: setRoleWithAuth, logout, userName, userTitle, isAuthenticated }}>
       {children}
     </RoleContext.Provider>
   );

@@ -23,6 +23,7 @@ type Claim = {
 const FILTERS = ["All", "PENDING", "APPROVED", "DENIED"] as const;
 
 export default function ClaimsPage() {
+  const router = useRouter();
   const { role } = useRole();
   const [claims, setClaims] = useState<Claim[]>([]);
   const [loading, setLoading] = useState(true);
