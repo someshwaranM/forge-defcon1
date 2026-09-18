@@ -9,7 +9,7 @@ import Alert from "../../../components/ui/Alert";
 import Modal from "../../../components/ui/Modal";
 import { DemoDataManager } from "../../../lib/completeDemoData";
 
-const USE_DEMO_DATA = true;
+const USE_DEMO_DATA = false;
 
 interface AIAnalysisReport {
   recommendation: "APPROVE" | "DENY" | "REQUEST_INFO";

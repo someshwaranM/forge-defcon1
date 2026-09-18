@@ -8,7 +8,7 @@ import { DemoDataManager, type DemoInsuranceClaim } from "../lib/completeDemoDat
 import { useRole } from "../contexts/RoleContext";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
-const USE_DEMO_DATA = true; // Set to false when backend is available
+const USE_DEMO_DATA = false; // Set to false when backend is available
 
 type Claim = {
   id: string;

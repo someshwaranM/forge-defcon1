@@ -34,7 +34,7 @@ import AIAgentChat from "../../components/claims/AIAgentChat";
 import { DemoDataManager, type DemoInsuranceClaim } from "../../lib/completeDemoData";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
-const USE_DEMO_DATA = true; // Set to false when backend is available
+const USE_DEMO_DATA = false; // Set to false when backend is available
 
 type ReasoningStep = { step: string; detail: string };
 type InteractionAlertData = {
