@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect } from "react";
 import {
   LayoutDashboard,
   FileStack,
@@ -37,7 +38,26 @@ const INSURANCE_NAV = [
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { role, setRole, userName, userTitle } = useRole();
+  const router = useRouter();
+  const { role, setRole, userName, userTitle, isAuthenticated } = useRole();
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!isAuthenticated && !pathname.startsWith("/login")) {
+      router.push("/login");
+    }
+  }, [isAuthenticated, pathname, router]);
+
+  // Handle role switch - redirect to dashboard
+  const handleRoleSwitch = () => {
+    const newRole = role === "hospital" ? "insurance" : "hospital";
+    setRole(newRole);
+    router.push("/"); // Always go to dashboard when switching
+  };
+
+  if (!isAuthenticated) {
+    return null; // Show nothing while redirecting
+  }
 
   const NAV_ITEMS = role === "hospital" ? HOSPITAL_NAV : INSURANCE_NAV;
 
@@ -87,9 +107,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <div className="text-sm font-medium text-slate-200">{userName}</div>
           <div className="text-xs text-slate-400 mt-0.5">{userTitle}</div>
 
-          {/* Demo: Role Switcher */}
+          {/* Role Switcher */}
           <button
-            onClick={() => setRole(role === "hospital" ? "insurance" : "hospital")}
+            onClick={handleRoleSwitch}
             className="mt-3 w-full rounded-md bg-white/5 px-2 py-1.5 text-xs text-slate-300 hover:bg-white/10 transition-colors"
           >
             Switch to {role === "hospital" ? "Insurance" : "Hospital"}

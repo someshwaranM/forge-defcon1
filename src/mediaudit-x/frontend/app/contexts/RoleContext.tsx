@@ -5,22 +5,29 @@ import { createContext, useContext, useState, ReactNode } from "react";
 export type UserRole = "hospital" | "insurance";
 
 interface RoleContextType {
-  role: UserRole;
+  role: UserRole | null;
   setRole: (role: UserRole) => void;
   userName: string;
   userTitle: string;
+  isAuthenticated: boolean;
 }
 
 const RoleContext = createContext<RoleContextType | undefined>(undefined);
 
 export function RoleProvider({ children }: { children: ReactNode }) {
-  const [role, setRole] = useState<UserRole>("insurance"); // Default to insurance reviewer for demo
+  const [role, setRole] = useState<UserRole | null>(null); // Start with no role - requires login
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   const userName = role === "hospital" ? "CityCare Hospital" : "Dr. Sarah Mitchell";
   const userTitle = role === "hospital" ? "Hospital Administrator" : "Insurance Reviewer";
 
+  const setRoleWithAuth = (newRole: UserRole) => {
+    setRole(newRole);
+    setIsAuthenticated(true);
+  };
+
   return (
-    <RoleContext.Provider value={{ role, setRole, userName, userTitle }}>
+    <RoleContext.Provider value={{ role, setRole: setRoleWithAuth, userName, userTitle, isAuthenticated }}>
       {children}
     </RoleContext.Provider>
   );

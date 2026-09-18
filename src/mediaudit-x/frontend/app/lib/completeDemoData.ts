@@ -544,10 +544,10 @@ export class DemoDataManager {
 
     const stored = localStorage.getItem(this.STORAGE_KEY);
     if (!stored) {
-      // Initialize with demo scenarios
+      // Initialize with demo scenarios - set to PENDING for insurance review
       const initialClaims = [
-        DEMO_SCENARIO_1.insuranceClaim,
-        DEMO_SCENARIO_2.insuranceClaim,
+        { ...DEMO_SCENARIO_1.insuranceClaim, status: "PENDING" as const },
+        { ...DEMO_SCENARIO_2.insuranceClaim, status: "PENDING" as const },
       ];
       localStorage.setItem(this.STORAGE_KEY, JSON.stringify(initialClaims));
       return initialClaims;

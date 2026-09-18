@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import StatusBadge from "../components/StatusBadge";
 import { DemoDataManager, type DemoInsuranceClaim } from "../lib/completeDemoData";
 import { useRole } from "../contexts/RoleContext";
-import Alert from "../components/ui/Alert";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 const USE_DEMO_DATA = true; // Set to false when backend is available
@@ -53,15 +53,19 @@ export default function ClaimsPage() {
 
   const filtered = filter === "All" ? claims : claims.filter((c) => c.status === filter);
 
+  // Redirect insurance to review queue
+  useEffect(() => {
+    if (role === "insurance") {
+      router.push("/review-queue");
+    }
+  }, [role, router]);
+
+  if (role === "insurance") {
+    return null; // Redirecting
+  }
+
   return (
     <div className="space-y-5">
-      {/* Access Control Alert for Insurance Role */}
-      {role === "insurance" && (
-        <Alert type="warning" title="Read-Only Access">
-          You are viewing claims as an Insurance Reviewer. Claims can only be created by hospitals. Use the Review Queue to process submitted claims.
-        </Alert>
-      )}
-
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">{role === "hospital" ? "My Claims" : "All Claims"}</h1>
