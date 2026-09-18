@@ -2,17 +2,24 @@
 Agent orchestration loop — the real multi-step adjudication logic.
 
 BUILT LIVE (18 Sept): implements the actual loop the spec calls for:
-  1. Claude is given the claim + three tools and reasons about which to
+  1. Claim vs Evidence Check (ARCHITECTURE.md Stage 6) runs first,
+     deterministic, before any payer logic -- do the documents actually
+     support this claim's final codes? (app/evidence/evidence_check.py).
+     A claim with no documents (every seeded demo claim) comes back
+     NOT_APPLICABLE, not a failure.
+  2. Claude is given the claim + three tools and reasons about which to
      call, in what order, possibly across multiple rounds.
-  2. Each tool call and its result is yielded as an SSE-shaped event so
+  3. Each tool call and its result is yielded as an SSE-shaped event so
      the UI shows live reasoning, not a spinner.
-  3. Every tool result that contributes to the decision is turned into a
+  4. Every tool result that contributes to the decision is turned into a
      cited_evidence entry with a real source index/id (and a byte-offset
      range computed from the actual source text, not a placeholder).
-  4. Once Claude stops calling tools (or a safety cap is hit), the
+  5. Once Claude stops calling tools (or a safety cap is hit), the
      decision is finalized: audit_ledger.append_entry() writes the
      hash-chained record, adjudication-results is written, and a
-     template-based letter + FHIR ClaimResponse are generated.
+     template-based letter + FHIR ClaimResponse are generated. The
+     evidence check's UNSUPPORTED result can force REQUEST_INFO ahead of
+     the policy/step-therapy checks -- see _decide().
 
 This intentionally does NOT let Claude free-write the final decision text
 or the letter body — the decision is derived deterministically from tool
@@ -26,70 +33,21 @@ import json
 from datetime import datetime, timezone
 from uuid import uuid4
 
-import anthropic
-
 from app.config import settings
 from app.es_client import get_es_client
+from app.evidence.evidence_check import check_claim_evidence
+from app.indices.names import ALL_CLAIMS, EVIDENCE_CHECKS
+from app.llm_client import make_llm_client
 from app.tools.trajectory_tool import query_patient_clinical_trajectory
 from app.tools.policy_matcher_tool import (
     match_payer_coverage_policy,
     match_payer_coverage_policy_fallback,
 )
 from app.tools.drug_interaction_tool import audit_drug_drug_contraindications
-from app.tools.audit_ledger import append_entry
+from app.tools.audit_ledger import append_entry, append_event
 from app.actuators.letter_generator import generate_letter, build_fhir_claim_response
 
 MAX_TOOL_ROUNDS = 6
-
-
-def _make_llm_client():
-    """
-    Returns (client, model_id) for whichever provider is configured.
-
-    Default is AWS Bedrock (settings.llm_provider="bedrock") -- constructs
-    anthropic.AnthropicBedrock, which authenticates one of two ways:
-
-    1. Bedrock API key (bearer token) -- if settings.aws_bearer_token_bedrock
-       is set (AWS's newer ABSK-prefixed long-lived key, from Console ->
-       Bedrock -> API keys, or CreateServiceSpecificCredential). ADDED
-       (18 Sept): requires anthropic>=0.88.0 (bumped in requirements.txt --
-       0.34.2 predates this and only ever SigV4-signs, which rejects an
-       ABSK key with a confusing "security token...invalid" 403 that has
-       nothing to do with session tokens). The SDK reads this from the
-       AWS_BEARER_TOKEN_BEDROCK env var, so it's set there explicitly
-       (pydantic-settings loads .env into this process's Settings object,
-       not into os.environ, so this has to be done by hand) and
-       aws_access_key/aws_secret_key/aws_session_token are left unset --
-       passing explicit (even blank) values for those forces the SigV4
-       path instead and the bearer token is ignored.
-    2. Classic SigV4 (aws_access_key_id/aws_secret_access_key pair) --
-       used only if no bearer token is configured. If those are also
-       unset, None is passed through and boto3's own default credential
-       chain (env vars, ~/.aws/credentials, an IAM role, SSO) resolves
-       them at call time.
-
-    Falls back to the direct Anthropic API only if llm_provider is
-    explicitly set to "anthropic" in .env (e.g. for local dev without
-    Bedrock model access configured yet).
-    """
-    if settings.llm_provider == "anthropic":
-        if not settings.anthropic_api_key:
-            return None, None
-        return anthropic.Anthropic(api_key=settings.anthropic_api_key), settings.anthropic_model
-
-    if settings.aws_bearer_token_bedrock:
-        import os
-        os.environ["AWS_BEARER_TOKEN_BEDROCK"] = settings.aws_bearer_token_bedrock
-        client = anthropic.AnthropicBedrock(aws_region=settings.aws_region)
-        return client, settings.bedrock_model_id
-
-    client = anthropic.AnthropicBedrock(
-        aws_access_key=settings.aws_access_key_id,
-        aws_secret_key=settings.aws_secret_access_key,
-        aws_session_token=settings.aws_session_token,
-        aws_region=settings.aws_region,
-    )
-    return client, settings.bedrock_model_id
 
 TOOLS = [
     {
@@ -369,16 +327,26 @@ def _cited_evidence_from_trajectory(patient_id: str, trajectory_result: dict) ->
     }]
 
 
-def _decide(trajectory_result: dict | None, policy_result: dict | None, interaction_result: dict | None) -> str:
+def _decide(trajectory_result: dict | None, policy_result: dict | None, interaction_result: dict | None,
+            evidence_result: dict | None = None) -> str:
     """
     Deterministic decision logic — not left to the LLM. Any contraindicated
-    interaction blocks approval outright; otherwise step-therapy compliance
-    (when a policy requiring it was matched) decides APPROVED vs DENIED.
+    interaction blocks approval outright; then the Claim vs Evidence Check
+    (ARCHITECTURE.md Stage 6) -- if the documents don't actually support
+    the final codes, don't spend policy/trajectory logic on it, ask for
+    more info instead; otherwise step-therapy compliance (when a policy
+    requiring it was matched) decides APPROVED vs DENIED. evidence_result
+    is None for claims with no documents (NOT_APPLICABLE) or when this
+    function is called without running the check -- both keep today's
+    behavior unchanged (backward compatible with the seeded demo claims).
     """
     if interaction_result:
         for hit in interaction_result.get("hits", {}).get("hits", []):
             if hit["_source"].get("severity") in ("Contraindicated", "Major"):
                 return "DENIED"
+
+    if evidence_result and evidence_result.get("overall") == "UNSUPPORTED":
+        return "REQUEST_INFO"
 
     if policy_result:
         hits = policy_result.get("hits", {}).get("hits", [])
@@ -399,7 +367,7 @@ async def adjudicate_claim(claim: dict):
     Async generator yielding (event_name, data_dict) tuples for SSE.
     The final yielded event is always ("done", {...final adjudication...}).
     """
-    client, model_id = _make_llm_client()
+    client, model_id = make_llm_client()
     adjudication_id = f"ADJ-{uuid4().hex[:8].upper()}"
 
     trajectory_result = None
@@ -444,6 +412,30 @@ async def adjudicate_claim(claim: dict):
         "step": "started",
         "detail": f"Adjudication {adjudication_id} started for claim {claim.get('claim_id')}",
     }
+
+    # Stage 6 — Claim vs Evidence Check, before any payer logic (per
+    # ARCHITECTURE.md: "run as the first step of adjudicate_claim"). Never
+    # raises: a claim with no documents (every seeded demo claim) comes
+    # back NOT_APPLICABLE, not an error.
+    evidence_result = check_claim_evidence(claim)
+    yield "reasoning_step", {
+        "step": "evidence_check",
+        "detail": (
+            f"Claim vs Evidence Check: overall={evidence_result['overall']} "
+            f"({len(evidence_result['codes'])} code(s) checked: "
+            f"{[(c['code'], c['result']) for c in evidence_result['codes']]})"
+        ),
+    }
+    try:
+        get_es_client().index(index=EVIDENCE_CHECKS, document=evidence_result)
+    except Exception as e:  # noqa: BLE001
+        yield "reasoning_step", {"step": "write_error", "detail": f"Could not write {EVIDENCE_CHECKS}: {e}"}
+    append_event(
+        claim_id=claim.get("claim_id", "unknown"),
+        event_type="EVIDENCE_CHECKED",
+        payload=evidence_result,
+        ref_id=claim.get("claim_id"),
+    )
 
     any_tool_called = False
 
@@ -575,7 +567,7 @@ async def adjudicate_claim(claim: dict):
 
         messages.append({"role": "user", "content": tool_results_content})
 
-    status = _decide(trajectory_result, policy_result, interaction_result)
+    status = _decide(trajectory_result, policy_result, interaction_result, evidence_result)
 
     letter = generate_letter(
         claim=claim,
@@ -607,6 +599,7 @@ async def adjudicate_claim(claim: dict):
         # fields; nothing else in the schema changes.
         "matched_policy": matched_policy,
         "trajectory_result": trajectory_result,
+        "evidence_result": evidence_result,
     }
     try:
         es.index(index="adjudication-results", document=adjudication_doc)
@@ -634,19 +627,25 @@ async def adjudicate_claim(claim: dict):
     # this doesn't need to know the document's internal ES _id -- claims
     # are indexed without an explicit id (see routers/claims.py), only
     # queryable/updatable by the claim_id term.
+    #
+    # index=ALL_CLAIMS (not just insurance-claims): claims created via
+    # upload intake live in claim-files, not insurance-claims -- targeting
+    # only the latter meant an uploaded claim's status silently never
+    # updated after adjudication. update_by_query across both indices only
+    # touches whichever one actually has a matching claim_id.
     try:
         update_result = es.update_by_query(
-            index="insurance-claims",
+            index=ALL_CLAIMS,
             query={"term": {"claim_id": claim.get("claim_id", "")}},
             script={"source": "ctx._source.status = params.status", "params": {"status": status}},
             refresh=True,
         )
         yield "reasoning_step", {
             "step": "claim_status_updated",
-            "detail": f"insurance-claims status set to {status} ({update_result.get('updated', 0)} document(s) updated).",
+            "detail": f"Claim status set to {status} ({update_result.get('updated', 0)} document(s) updated).",
         }
     except Exception as e:  # noqa: BLE001
-        yield "reasoning_step", {"step": "write_error", "detail": f"Could not update claim status in insurance-claims: {e}"}
+        yield "reasoning_step", {"step": "write_error", "detail": f"Could not update claim status: {e}"}
 
     yield "done", {
         "status": status,
@@ -657,4 +656,5 @@ async def adjudicate_claim(claim: dict):
         "ledger_entry": ledger_entry,
         "matched_policy": matched_policy,
         "trajectory_result": trajectory_result,
+        "evidence_result": evidence_result,
     }
