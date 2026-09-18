@@ -2,19 +2,43 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Building2, Shield, ArrowRight } from "lucide-react";
+import { Building2, Shield, ArrowRight, AlertCircle } from "lucide-react";
 import Button from "../components/ui/Button";
 import { useRole } from "../contexts/RoleContext";
 
 export default function LoginPage() {
   const router = useRouter();
   const { setRole } = useRole();
-  const [selectedRole, setSelectedRole] = useState<"hospital" | "insurance" | null>(null);
-  const [credentials, setCredentials] = useState({ username: "", password: "" });
+  const [credentials, setCredentials] = useState({
+    username: "",
+    password: "",
+    role: "" as "hospital" | "insurance" | ""
+  });
   const [loggingIn, setLoggingIn] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleLogin = async () => {
-    if (!selectedRole || !credentials.username || !credentials.password) return;
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+
+    if (!credentials.username || !credentials.password || !credentials.role) {
+      setError("Please fill in all fields");
+      return;
+    }
+
+    // Validate credentials
+    const validCredentials = {
+      hospital: { username: "hospital", password: "demo" },
+      insurance: { username: "insurance", password: "demo" }
+    };
+
+    if (
+      credentials.username !== validCredentials[credentials.role].username ||
+      credentials.password !== validCredentials[credentials.role].password
+    ) {
+      setError("Invalid username or password");
+      return;
+    }
 
     setLoggingIn(true);
 
@@ -22,14 +46,14 @@ export default function LoginPage() {
     await new Promise(resolve => setTimeout(resolve, 1000));
 
     // Set role and redirect to dashboard
-    setRole(selectedRole);
+    setRole(credentials.role);
     setLoggingIn(false);
     router.push("/");
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
-      <div className="max-w-5xl w-full">
+      <div className="max-w-md w-full">
         {/* Header */}
         <div className="text-center mb-8">
           <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-600 text-white text-2xl font-bold mb-4">
@@ -39,157 +63,102 @@ export default function LoginPage() {
           <p className="text-slate-600">AI-Powered Clinical Claims Intelligence Platform</p>
         </div>
 
-        {!selectedRole ? (
-          /* Role Selection */
-          <div className="grid md:grid-cols-2 gap-6">
-            {/* Hospital Portal */}
-            <button
-              onClick={() => setSelectedRole("hospital")}
-              className="card p-8 text-left hover:shadow-xl hover:border-blue-300 transition-all group"
-            >
-              <div className="flex items-start gap-4">
-                <div className="p-4 rounded-xl bg-blue-100 text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                  <Building2 size={32} />
-                </div>
-                <div className="flex-1">
-                  <h2 className="text-xl font-semibold text-slate-900 mb-2">Hospital Portal</h2>
-                  <p className="text-slate-600 text-sm mb-4">
-                    Create and submit insurance claims with AI-powered code generation
-                  </p>
-                  <div className="space-y-1 text-sm text-slate-600">
-                    <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-blue-600"></div>
-                      Create claims with plain language
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-blue-600"></div>
-                      Upload supporting documents
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-blue-600"></div>
-                      Generate technical reports
-                    </div>
-                  </div>
-                  <div className="mt-4 flex items-center gap-2 text-blue-600 font-medium">
-                    Login as Hospital <ArrowRight size={16} />
-                  </div>
-                </div>
-              </div>
-            </button>
+        {/* Login Form */}
+        <div className="card p-8">
+          <h2 className="text-xl font-semibold text-slate-900 mb-6 text-center">
+            Sign In
+          </h2>
 
-            {/* Insurance Portal */}
-            <button
-              onClick={() => setSelectedRole("insurance")}
-              className="card p-8 text-left hover:shadow-xl hover:border-purple-300 transition-all group"
-            >
-              <div className="flex items-start gap-4">
-                <div className="p-4 rounded-xl bg-purple-100 text-purple-600 group-hover:bg-purple-600 group-hover:text-white transition-colors">
-                  <Shield size={32} />
-                </div>
-                <div className="flex-1">
-                  <h2 className="text-xl font-semibold text-slate-900 mb-2">Insurance Portal</h2>
-                  <p className="text-slate-600 text-sm mb-4">
-                    Review claims with automatic AI analysis and policy verification
-                  </p>
-                  <div className="space-y-1 text-sm text-slate-600">
-                    <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-purple-600"></div>
-                      Review submitted claims
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-purple-600"></div>
-                      Automatic AI analysis
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-purple-600"></div>
-                      Approve or deny claims
-                    </div>
-                  </div>
-                  <div className="mt-4 flex items-center gap-2 text-purple-600 font-medium">
-                    Login as Insurance <ArrowRight size={16} />
-                  </div>
-                </div>
-              </div>
-            </button>
-          </div>
-        ) : (
-          /* Login Form */
-          <div className="max-w-md mx-auto">
-            <div className="card p-8">
-              <div className="text-center mb-6">
-                <div className={`inline-flex p-4 rounded-xl mb-4 ${
-                  selectedRole === "hospital" ? "bg-blue-100 text-blue-600" : "bg-purple-100 text-purple-600"
-                }`}>
-                  {selectedRole === "hospital" ? <Building2 size={32} /> : <Shield size={32} />}
-                </div>
-                <h2 className="text-xl font-semibold text-slate-900">
-                  {selectedRole === "hospital" ? "Hospital Portal" : "Insurance Portal"} Login
-                </h2>
-                <p className="text-sm text-slate-600 mt-1">
-                  Enter your credentials to continue
-                </p>
-              </div>
+          {error && (
+            <div className="mb-4 flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">
+              <AlertCircle size={16} />
+              {error}
+            </div>
+          )}
 
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                    Username
-                  </label>
-                  <input
-                    type="text"
-                    value={credentials.username}
-                    onChange={(e) => setCredentials(prev => ({ ...prev, username: e.target.value }))}
-                    placeholder={selectedRole === "hospital" ? "hospital" : "insurance"}
-                    className="input"
-                    onKeyPress={(e) => e.key === "Enter" && handleLogin()}
-                  />
-                </div>
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                Username
+              </label>
+              <input
+                type="text"
+                value={credentials.username}
+                onChange={(e) => setCredentials(prev => ({ ...prev, username: e.target.value }))}
+                placeholder="Enter username"
+                className="input"
+                disabled={loggingIn}
+              />
+            </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                    Password
-                  </label>
-                  <input
-                    type="password"
-                    value={credentials.password}
-                    onChange={(e) => setCredentials(prev => ({ ...prev, password: e.target.value }))}
-                    placeholder="Enter password"
-                    className="input"
-                    onKeyPress={(e) => e.key === "Enter" && handleLogin()}
-                  />
-                </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                Password
+              </label>
+              <input
+                type="password"
+                value={credentials.password}
+                onChange={(e) => setCredentials(prev => ({ ...prev, password: e.target.value }))}
+                placeholder="Enter password"
+                className="input"
+                disabled={loggingIn}
+              />
+            </div>
 
-                <div className="text-xs text-slate-500 bg-slate-50 p-3 rounded-lg">
-                  <strong>Demo Credentials:</strong><br/>
-                  Username: {selectedRole}<br/>
-                  Password: demo
-                </div>
-
-                <Button
-                  variant="primary"
-                  size="lg"
-                  onClick={handleLogin}
-                  loading={loggingIn}
-                  disabled={!credentials.username || !credentials.password}
-                  className="w-full"
-                  icon={<ArrowRight size={18} />}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Sign in as
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setCredentials(prev => ({ ...prev, role: "hospital" }))}
+                  className={`flex flex-col items-center gap-2 rounded-lg border-2 p-4 transition-all ${
+                    credentials.role === "hospital"
+                      ? "border-blue-600 bg-blue-50 text-blue-600"
+                      : "border-slate-200 text-slate-600 hover:border-slate-300"
+                  }`}
+                  disabled={loggingIn}
                 >
-                  Login to {selectedRole === "hospital" ? "Hospital" : "Insurance"} Portal
-                </Button>
+                  <Building2 size={24} />
+                  <span className="text-sm font-medium">Hospital</span>
+                </button>
 
                 <button
-                  onClick={() => {
-                    setSelectedRole(null);
-                    setCredentials({ username: "", password: "" });
-                  }}
-                  className="w-full text-sm text-slate-600 hover:text-slate-900"
+                  type="button"
+                  onClick={() => setCredentials(prev => ({ ...prev, role: "insurance" }))}
+                  className={`flex flex-col items-center gap-2 rounded-lg border-2 p-4 transition-all ${
+                    credentials.role === "insurance"
+                      ? "border-purple-600 bg-purple-50 text-purple-600"
+                      : "border-slate-200 text-slate-600 hover:border-slate-300"
+                  }`}
+                  disabled={loggingIn}
                 >
-                  ← Back to portal selection
+                  <Shield size={24} />
+                  <span className="text-sm font-medium">Insurance</span>
                 </button>
               </div>
             </div>
-          </div>
-        )}
+
+            <div className="text-xs text-slate-500 bg-slate-50 p-3 rounded-lg">
+              <strong>Demo Credentials:</strong><br/>
+              Hospital: username=<code>hospital</code>, password=<code>demo</code><br/>
+              Insurance: username=<code>insurance</code>, password=<code>demo</code>
+            </div>
+
+            <Button
+              type="submit"
+              variant="primary"
+              size="lg"
+              loading={loggingIn}
+              disabled={!credentials.username || !credentials.password || !credentials.role}
+              className="w-full"
+              icon={<ArrowRight size={18} />}
+            >
+              Sign In
+            </Button>
+          </form>
+        </div>
 
         {/* Footer */}
         <div className="text-center mt-8 text-sm text-slate-500">
