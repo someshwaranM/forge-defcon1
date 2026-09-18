@@ -1,0 +1,51 @@
+# Full stack on this server (UI + backend), plain HTTP.
+#
+#   docker compose -f docker-compose.server.yml up -d --build   start / apply changes after git pull
+#   docker compose -f docker-compose.server.yml ps              status
+#   docker compose -f docker-compose.server.yml logs -f         logs (add: backend / frontend)
+#   docker compose -f docker-compose.server.yml down            stop
+#
+# UI   http://<server>:3000     (PUBLIC_API_URL below must be reachable from the browser)
+# API  http://<server>:8000/docs
+#
+# Settings: backend/.env (Elasticsearch, LLM keys, CORS_ORIGINS — include
+# the UI's address, or "*"). Missing indices and new mapping fields are
+# applied on backend startup. Optional sample data:
+#   docker compose -f docker-compose.server.yml run --rm backend sh ./docker-setup.sh
+#
+# Other server/domain: PUBLIC_API_URL=http://<ip-or-domain>:8000 docker compose -f docker-compose.server.yml up -d --build
+
+name: mediaudit-x-server
+
+services:
+  backend:
+    build: ./backend
+    env_file: ./backend/.env
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - uploads:/app/uploads      # uploaded documents; survives rebuilds
+      - ./data:/data:ro           # sample data, used only by docker-setup.sh
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    environment:
+      # The browser calls the API directly, so this is the public URL.
+      NEXT_PUBLIC_API_BASE_URL: ${PUBLIC_API_URL:-http://187.77.130.9:8000}
+      WATCHPACK_POLLING: "true"
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    volumes:
+      # UI code hot-reloads after git pull; rebuild only for package.json changes.
+      - ./frontend/app:/app/app
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  uploads:
+    # Same volume the earlier backend-only setup used, so existing uploads stay.
+    name: mediaudit-x-backend_uploads

@@ -8,9 +8,38 @@ import Button from "../../components/ui/Button";
 import Alert from "../../components/ui/Alert";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+
+// Mirrors ALLOWED_EXTENSIONS / DOC_TYPES in backend app/pipeline/ingestion/models.py.
+const ACCEPT = ".pdf,.png,.jpg,.jpeg,.tif,.tiff";
+const DOC_TYPES = [
+  ["supporting_document", "Supporting document"],
+  ["referral_letter", "Referral letter"],
+  ["op_note", "Operative note"],
+  ["discharge_summary", "Discharge summary"],
+  ["lab_report", "Lab report"],
+  ["prescription", "Prescription"],
+  ["imaging_report", "Imaging report"],
+  ["other", "Other"],
+] as const;
+
+type Rejected = { filename: string; code: string; message: string };
+type SubmitResult = {
+  claim: { claim_id: string; status: string };
+  accepted: { doc_id: string; original_filename: string; source_uri: string }[];
+  rejected: Rejected[];
+};
+
 type Step = "details" | "generating" | "review" | "submitting" | "success";
 
 interface SimpleClaimFormData {
+  // Stored on the claim record itself (claim-files)
+  patientId: string;
+  claimId: string;
+  claimType: string;
+  docType: string;
+  hospitalName: string;
+
   // Patient Basic Info
   patientName: string;
   patientAge: string;
@@ -90,6 +119,11 @@ interface GeneratedClaimReport {
 }
 
 const EMPTY_FORM: SimpleClaimFormData = {
+  patientId: "",
+  claimId: "",
+  claimType: "professional",
+  docType: "supporting_document",
+  hospitalName: "",
   patientName: "",
   patientAge: "",
   patientGender: "",
@@ -121,6 +155,9 @@ export default function CreateClaimPage() {
   const [formData, setFormData] = useState<SimpleClaimFormData>(EMPTY_FORM);
   const [generatedReport, setGeneratedReport] = useState<GeneratedClaimReport | null>(null);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [submitResult, setSubmitResult] = useState<SubmitResult | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [rejectedFiles, setRejectedFiles] = useState<Rejected[]>([]);
 
   const updateForm = <K extends keyof SimpleClaimFormData>(key: K, value: SimpleClaimFormData[K]) => {
     setFormData((prev) => ({ ...prev, [key]: value }));
@@ -139,10 +176,65 @@ export default function CreateClaimPage() {
     setStep("review");
   };
 
+  // Creates the claim (DRAFT) with its details and any documents via POST /claims/intake.
   const handleApproveAndSubmit = async () => {
     setStep("submitting");
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    setStep("success");
+    setSubmitError(null);
+    setRejectedFiles([]);
+
+    const f = formData;
+    const details = {
+      patient: { name: f.patientName, age: f.patientAge, gender: f.patientGender, contact: f.patientContact },
+      clinical: {
+        chief_complaint: f.chiefComplaint,
+        problem_description: f.problemDescription,
+        symptoms: f.symptomsDescription,
+        duration: f.howLongProblem,
+        diagnosis_in_words: f.diagnosisInWords,
+        treatment: f.treatmentDescription,
+        procedures: f.proceduresDescription,
+        medications: f.medicationsGiven,
+      },
+      admission: { admission_date: f.admissionDate, discharge_date: f.dischargeDate, length_of_stay: f.lengthOfStay },
+      services: {
+        room_category: f.roomCategory,
+        special_facilities: f.specialFacilities,
+        services_provided: f.servicesProvided,
+      },
+      hospital: { name: f.hospitalName, department: f.departmentName, attending_doctor: f.attendingDoctor },
+      insurance: { company: f.insuranceCompany, policy_number: f.policyNumber },
+      estimated_total_cost: f.estimatedTotalCost || null,
+    };
+
+    const fd = new FormData();
+    if (f.patientId.trim()) fd.append("patient_id", f.patientId.trim());
+    if (f.insuranceCompany.trim()) fd.append("payer_name", f.insuranceCompany.trim());
+    fd.append("claim_type", f.claimType);
+    fd.append("doc_type", f.docType);
+    if (f.claimId.trim()) fd.append("claim_id", f.claimId.trim());
+    if (f.hospitalName.trim()) fd.append("submitted_by", f.hospitalName.trim());
+    fd.append("details", JSON.stringify(details));
+    for (const file of uploadedFiles) fd.append("files", file);
+
+    try {
+      let res: Response;
+      try {
+        res = await fetch(`${API_BASE_URL}/claims/intake`, { method: "POST", body: fd });
+      } catch {
+        throw new Error(`Could not reach the API at ${API_BASE_URL}. Is the backend running?`);
+      }
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setRejectedFiles(body.rejected || []);
+        throw new Error(typeof body.detail === "string" ? body.detail : `Submit failed (${res.status})`);
+      }
+      setSubmitResult(body as SubmitResult);
+      setRejectedFiles(body.rejected || []);
+      setStep("success");
+    } catch (err: any) {
+      setSubmitError(err.message || "Something went wrong.");
+      setStep("review");
+    }
   };
 
   const handleEditAndRegenerate = () => {
@@ -158,16 +250,17 @@ export default function CreateClaimPage() {
               <CheckCircle size={32} className="text-emerald-600" />
             </div>
           </div>
-          <h1 className="text-2xl font-semibold text-slate-900 mb-2">Claim Submitted Successfully!</h1>
+          <h1 className="text-2xl font-semibold text-slate-900 mb-2">Claim Created</h1>
           <p className="text-slate-600 mb-6">
-            Your claim has been generated with all technical details, reviewed, and submitted to the insurance company.
+            Saved as <span className="font-medium">{submitResult?.claim.status ?? "DRAFT"}</span> with its details and
+            documents. Codes are added next, from the uploaded documents.
           </p>
 
           <div className="bg-slate-50 rounded-lg p-4 mb-6 text-left">
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
                 <span className="text-slate-500">Claim ID:</span>
-                <div className="font-semibold text-slate-900">{generatedReport?.claimId}</div>
+                <div className="font-semibold text-slate-900">{submitResult?.claim.claim_id}</div>
               </div>
               <div>
                 <span className="text-slate-500">Patient:</span>
@@ -184,14 +277,38 @@ export default function CreateClaimPage() {
             </div>
           </div>
 
+          {submitResult && submitResult.accepted.length > 0 && (
+            <div className="mb-6 text-left text-sm">
+              <div className="mb-1 font-medium text-slate-700">
+                {submitResult.accepted.length} document{submitResult.accepted.length === 1 ? "" : "s"} stored:
+              </div>
+              <ul className="space-y-1">
+                {submitResult.accepted.map((d) => (
+                  <li key={d.doc_id} className="rounded bg-slate-50 px-3 py-1.5 text-slate-600">
+                    {d.original_filename} <span className="text-slate-400">· {d.doc_id}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {rejectedFiles.length > 0 && <RejectedNotice rejected={rejectedFiles} />}
+
           <div className="flex gap-3 justify-center">
             <Button variant="outline" onClick={() => router.push("/claims")}>
               View All Claims
             </Button>
+            {submitResult && (
+              <Button variant="outline" onClick={() => router.push(`/hospital/claims/${submitResult.claim.claim_id}`)}>
+                Open Claim {submitResult.claim.claim_id}
+              </Button>
+            )}
             <Button variant="primary" onClick={() => {
               setStep("details");
               setFormData(EMPTY_FORM);
               setGeneratedReport(null);
+              setUploadedFiles([]);
+              setSubmitResult(null);
+              setRejectedFiles([]);
             }}>
               Create Another Claim
             </Button>
@@ -261,6 +378,14 @@ export default function CreateClaimPage() {
               <h2 className="text-lg font-semibold text-slate-900">Patient Information</h2>
             </div>
             <div className="grid grid-cols-2 gap-4">
+              <FormField label="Patient ID">
+                <input
+                  value={formData.patientId}
+                  onChange={(e) => updateForm("patientId", e.target.value)}
+                  placeholder="e.g., PAT-883910"
+                  className="input"
+                />
+              </FormField>
               <FormField label="Patient Name">
                 <input
                   value={formData.patientName}
@@ -485,6 +610,14 @@ export default function CreateClaimPage() {
               </FormField>
 
               <div className="grid grid-cols-2 gap-4">
+                <FormField label="Hospital Name">
+                  <input
+                    value={formData.hospitalName}
+                    onChange={(e) => updateForm("hospitalName", e.target.value)}
+                    placeholder="e.g., City General Hospital"
+                    className="input"
+                  />
+                </FormField>
                 <FormField label="Department">
                   <input
                     value={formData.departmentName}
@@ -532,6 +665,25 @@ export default function CreateClaimPage() {
                  
                 />
               </FormField>
+              <FormField label="Claim Type">
+                <select
+                  value={formData.claimType}
+                  onChange={(e) => updateForm("claimType", e.target.value)}
+                  className="input"
+                >
+                  <option value="professional">Professional</option>
+                  <option value="institutional">Institutional</option>
+                  <option value="pharmacy">Pharmacy</option>
+                </select>
+              </FormField>
+              <FormField label="Claim ID (optional)">
+                <input
+                  value={formData.claimId}
+                  onChange={(e) => updateForm("claimId", e.target.value)}
+                  placeholder="auto-generated if blank"
+                  className="input"
+                />
+              </FormField>
               <FormField label="Estimated Total Cost ($)" className="col-span-2">
                 <input
                   type="number"
@@ -553,23 +705,33 @@ export default function CreateClaimPage() {
               <Paperclip size={20} className="text-blue-600" />
               <h2 className="text-lg font-semibold text-slate-900">Supporting Documents</h2>
               <span className="text-xs text-slate-500">(Bills, Prescriptions, Reports)</span>
+              <select
+                value={formData.docType}
+                onChange={(e) => updateForm("docType", e.target.value)}
+                className="ml-auto rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600"
+              >
+                {DOC_TYPES.map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
             </div>
 
             <label className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-slate-300 px-6 py-8 text-center hover:border-blue-400 hover:bg-blue-50/50 transition-colors">
               <Upload size={32} className="text-slate-400" />
               <div>
                 <span className="text-sm font-medium text-slate-700">Click to upload files</span>
-                <p className="text-xs text-slate-500 mt-1">PDF, Images, or Documents (Max 10MB each)</p>
+                <p className="text-xs text-slate-500 mt-1">PDF, PNG, JPG or TIFF (max 20 MB each)</p>
               </div>
               <input
                 type="file"
                 multiple
-                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                accept={ACCEPT}
                 className="hidden"
                 onChange={(e) => {
                   if (e.target.files) {
                     setUploadedFiles(prev => [...prev, ...Array.from(e.target.files!)]);
                   }
+                  e.target.value = "";
                 }}
               />
             </label>
@@ -630,9 +792,18 @@ export default function CreateClaimPage() {
       {/* Step 3: Review Generated Technical Report */}
       {step === "review" && generatedReport && (
         <div className="space-y-5">
-          <Alert type="success" title="Technical Claim Report Generated">
-            AI has generated all medical codes, technical documentation, and formal insurance submission letter. Review below and approve to submit.
+          <Alert type="warning" title="Demo preview — simulated codes">
+            The codes, policy match, billing breakdown and letter below are a simulated preview built from keywords in your
+            description; they are not verified and are not saved. Submitting stores your claim details and documents; real
+            codes are generated later from the uploaded documents (OCR → claim draft) and reviewed by a coder.
           </Alert>
+
+          {submitError && (
+            <Alert type="error" title="Submit failed">
+              {submitError}
+              {rejectedFiles.length > 0 && <RejectedNotice rejected={rejectedFiles} />}
+            </Alert>
+          )}
 
           {/* Executive Summary */}
           <div className="card p-5 bg-blue-50 border-2 border-blue-200">
@@ -769,7 +940,7 @@ export default function CreateClaimPage() {
                 onClick={handleApproveAndSubmit}
                 icon={<CheckCircle size={18} />}
               >
-                Approve & Submit to Insurance
+                Submit Claim
               </Button>
             </div>
           </div>
@@ -790,6 +961,18 @@ export default function CreateClaimPage() {
 }
 
 // Helper Components
+function RejectedNotice({ rejected }: { rejected: Rejected[] }) {
+  return (
+    <ul className="mt-2 space-y-0.5 text-sm text-amber-700">
+      {rejected.map((r, i) => (
+        <li key={i}>
+          <span className="font-medium">{r.filename}</span> — {r.message}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function StepIndicator({ number, label, active, completed }: { number: number; label: string; active: boolean; completed: boolean }) {
   return (
     <div className="flex flex-col items-center">

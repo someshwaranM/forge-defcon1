@@ -91,6 +91,10 @@ class Settings(BaseSettings):
 
     app_env: str = "development"
 
+    # Browser origins allowed to call the API (CORS), comma-separated,
+    # e.g. "https://app.example.com,http://187.77.130.9:3000". "*" allows any.
+    cors_origins: str = "http://localhost:3000"
+
     # Document ingestion (app/pipeline/ingestion). Limits are enforced by
     # the checks in app/pipeline/ingestion/checks.py.
     upload_dir: str | None = None  # default: backend/uploads

@@ -44,17 +44,24 @@ def create_all_indices() -> None:
 
 def ensure_indices() -> list[str]:
     """
-    Creates any index from mappings/ that doesn't exist yet and leaves
-    existing ones untouched. Called on API startup so a fresh cluster
-    works without running this script first. Returns the names created.
+    Creates any index from mappings/ that doesn't exist yet, and adds new
+    fields from the mapping files to indices that do (adding fields is
+    always allowed). Called on API startup so schema changes apply without
+    running this script. Returns the names created.
     """
     es = get_es_client()
     created = []
     for mapping_file in sorted(MAPPINGS_DIR.glob("*.json")):
         index_name = index_name_from_filename(mapping_file.name)
+        body = json.loads(mapping_file.read_text())
         if not es.indices.exists(index=index_name):
-            es.indices.create(index=index_name, body=json.loads(mapping_file.read_text()))
+            es.indices.create(index=index_name, body=body)
             created.append(index_name)
+            continue
+        try:
+            es.indices.put_mapping(index=index_name, body=body["mappings"])
+        except Exception as e:  # noqa: BLE001 - a conflicting field shouldn't block the others
+            print(f"[ensure_indices] could not sync mapping for {index_name}: {e}")
     return created
 
 
