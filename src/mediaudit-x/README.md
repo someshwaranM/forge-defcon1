@@ -113,7 +113,40 @@ source, rather than left to LLM inference alone.
   still undecided.
 - **No Elastic webhook/email action wired up yet.**
 
-## Quickstart — running locally
+## Quickstart — Docker (recommended)
+
+Needs Docker Desktop. Runs the backend and frontend against the
+Elasticsearch configured in `backend/.env`; missing indices are created
+automatically.
+
+```bash
+cd src/mediaudit-x
+cp backend/.env.example backend/.env   # then set ELASTIC_URL or ELASTIC_CLOUD_ID + ELASTIC_API_KEY
+docker compose up --build              # first run; later runs: docker compose up
+```
+
+- UI: http://localhost:3000 · API docs: http://localhost:8000/docs
+- Stop: `Ctrl+C`, or `docker compose down`
+- Elasticsearch running on your Mac itself? Use
+  `ELASTIC_URL=http://host.docker.internal:9200` in `backend/.env`
+- Sample data loads only when `insurance-claims` is empty; set
+  `SEED_SAMPLE_DATA=false` in `backend/.env` to skip it
+- Port already in use? `BACKEND_PORT=8001 docker compose up` (also
+  `FRONTEND_PORT`)
+- Code in `backend/app` and `frontend/app` hot-reloads; rebuild with
+  `--build` after changing `requirements.txt` or `package.json`
+
+Where data goes:
+
+| What | Where |
+|---|---|
+| Claims created by uploading documents | `claim-files` index |
+| Manual and sample claims | `insurance-claims` index |
+| Uploaded document details (doc_id, name, type, pages, size, sha256, path) | `claim-documents` index |
+| Hash-chained history of every upload | `audit-ledger` index |
+| The uploaded files themselves | `uploads` Docker volume (`/app/uploads/{claim_id}/{doc_id}.pdf`) |
+
+## Quickstart — running locally without Docker
 
 ### 1. Backend
 

@@ -88,11 +88,11 @@ export default function ClaimsPage() {
                   <td className="px-4 py-3 font-medium text-slate-800">{claim.claim_id}</td>
                   <td className="px-4 py-3 text-slate-500">{claim.patient_id}</td>
                   <td className="px-4 py-3 text-slate-500">{claim.payer_name}</td>
-                  <td className="px-4 py-3 text-slate-500">{claim.cpt_code}</td>
+                  <td className="px-4 py-3 text-slate-500">{claim.cpt_code || "—"}</td>
                   <td className="px-4 py-3">
                     <StatusBadge status={claim.status} />
                   </td>
-                  <td className="px-4 py-3 text-slate-700">${claim.claim_amount?.toLocaleString()}</td>
+                  <td className="px-4 py-3 text-slate-700">{claim.claim_amount != null ? `$${claim.claim_amount.toLocaleString()}` : "—"}</td>
                   <td className="px-4 py-3 text-right">
                     <Link href={`/claims/${claim.claim_id}`} className="text-xs font-medium text-blue-600 hover:underline">
                       View

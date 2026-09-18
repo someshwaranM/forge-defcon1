@@ -88,11 +88,11 @@ export default function HomePage() {
                   <tr key={claim.id} className="border-b border-slate-50 last:border-0">
                     <td className="py-2.5 font-medium text-slate-800">{claim.claim_id}</td>
                     <td className="py-2.5 text-slate-500">{claim.patient_id}</td>
-                    <td className="py-2.5 text-slate-500">{claim.cpt_code}</td>
+                    <td className="py-2.5 text-slate-500">{claim.cpt_code || "—"}</td>
                     <td className="py-2.5">
                       <StatusBadge status={claim.status} />
                     </td>
-                    <td className="py-2.5 text-slate-700">${claim.claim_amount?.toLocaleString()}</td>
+                    <td className="py-2.5 text-slate-700">{claim.claim_amount != null ? `$${claim.claim_amount.toLocaleString()}` : "—"}</td>
                     <td className="py-2.5 text-right">
                       <Link href={`/claims/${claim.claim_id}`} className="text-xs font-medium text-blue-600 hover:underline">
                         View
@@ -126,7 +126,7 @@ export default function HomePage() {
           <div className="card p-5">
             <h2 className="mb-3 text-sm font-semibold text-slate-800">Quick Actions</h2>
             <div className="space-y-2">
-              <QuickAction icon={Upload} label="Upload Claim" href="/claims/new" />
+              <QuickAction icon={Upload} label="Upload Documents" href="/claims/new" />
               <QuickAction icon={Search} label="Search Policy" href="/policy-lookup" />
               <QuickAction icon={ShieldCheck} label="View Audit Trail" href="/audit-trail" />
             </div>

@@ -26,6 +26,7 @@ import Timeline from "../../components/Timeline";
 import CitationPanel from "../../components/CitationPanel";
 import InteractionAlert from "../../components/InteractionAlert";
 import StatusBadge from "../../components/StatusBadge";
+import DocumentsPanel from "../../components/DocumentsPanel";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
@@ -136,6 +137,11 @@ export default function ClaimDetailPage() {
     ? "All coverage criteria satisfied"
     : null;
 
+  // Draft claims have documents but no codes yet; codes come from the
+  // later drafting/coder-review stages, so there's nothing to adjudicate.
+  const isDraft = (claim.status || "").toUpperCase() === "DRAFT";
+  const canAdjudicate = !running && !isDraft;
+
   const policyEvidence = (done?.cited_evidence || []).filter((e: any) => e.source_index === "medical-policies");
   const otherEvidence = (done?.cited_evidence || []).filter((e: any) => e.source_index !== "medical-policies");
 
@@ -152,21 +158,25 @@ export default function ClaimDetailPage() {
         </div>
         <button
           onClick={runAdjudication}
-          disabled={running}
+          disabled={!canAdjudicate}
+          title={isDraft ? "Draft claims need CPT/ICD-10 codes before adjudication" : undefined}
           className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white ${
-            running ? "cursor-default bg-slate-400" : "bg-blue-600 hover:bg-blue-700"
+            !canAdjudicate ? "cursor-default bg-slate-400" : "bg-blue-600 hover:bg-blue-700"
           }`}
         >
           <Play size={15} />
-          {running ? "Adjudicating..." : "Run Adjudication"}
+          {running ? "Adjudicating..." : isDraft ? "Awaiting coding" : "Run Adjudication"}
         </button>
       </div>
 
       <div className="card grid grid-cols-5 gap-4 p-4 text-sm">
         <Field label="Patient" value={claim.patient_id} />
         <Field label="Payer" value={claim.payer_name} />
-        <Field label="CPT / ICD-10" value={`${claim.cpt_code} / ${claim.icd10_code}`} />
-        <Field label="Claim Amount" value={`$${claim.claim_amount?.toLocaleString()}`} />
+        <Field
+          label="CPT / ICD-10"
+          value={claim.cpt_code || claim.icd10_code ? `${claim.cpt_code || "—"} / ${claim.icd10_code || "—"}` : "Pending coding"}
+        />
+        <Field label="Claim Amount" value={claim.claim_amount != null ? `$${claim.claim_amount.toLocaleString()}` : "—"} />
         <Field label="Submitted" value={claim.submitted_date} />
       </div>
 
@@ -196,7 +206,14 @@ export default function ClaimDetailPage() {
 
       {tab === "Overview" && (
         <div className="grid grid-cols-3 gap-5">
-          <div className="card col-span-2 p-5">
+          <div className="col-span-2 space-y-5">
+          <DocumentsPanel
+            claimId={claimId}
+            claimStatus={claim.status}
+            apiBaseUrl={API_BASE_URL}
+            onClaimChanged={(updated) => updated && setClaim(updated)}
+          />
+          <div className="card p-5">
             <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-800">
               <FileText size={15} /> Claim Summary
             </h2>
@@ -207,6 +224,7 @@ export default function ClaimDetailPage() {
             ) : (
               <p className="text-sm text-slate-400">Run adjudication to generate a decision summary and letter.</p>
             )}
+          </div>
           </div>
 
           <div className="space-y-5">
