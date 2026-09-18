@@ -10,7 +10,7 @@ import LoadingSpinner from "../components/ui/LoadingSpinner";
 import { DemoDataManager } from "../lib/completeDemoData";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
-const USE_DEMO_DATA = true; // Set to false when backend is available
+const USE_DEMO_DATA = false; // wired to the real backend API
 
 type Claim = {
   id?: string;
@@ -37,6 +37,7 @@ export default function ReviewQueuePage() {
   const [statusFilter, setStatusFilter] = useState<(typeof STATUS_FILTERS)[number]>("All");
   const [aiFilter, setAiFilter] = useState<(typeof AI_FILTERS)[number]>("All AI Recommendations");
   const [searchQuery, setSearchQuery] = useState("");
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
     if (USE_DEMO_DATA) {
@@ -51,24 +52,28 @@ export default function ReviewQueuePage() {
       setClaims(reviewable as any[]);
       setLoading(false);
     } else {
-      // Use real API
+      // Use real API. A failed request previously fell back to
+      // DemoDataManager's localStorage fixtures silently, which could
+      // make a broken backend/CORS connection look like a working (but
+      // empty or fake) review queue. Surface the real error instead.
       fetch(`${API_BASE_URL}/claims?limit=200`)
-        .then((res) => res.json())
+        .then((res) => {
+          if (!res.ok) throw new Error(`API returned ${res.status}`);
+          return res.json();
+        })
         .then((data) => {
           // Filter to show only claims that need review (not already approved/denied)
           const reviewable = data.filter((c: Claim) =>
             c.status === "PENDING" || c.status === "REQUEST_INFO"
           );
           setClaims(reviewable);
+          setFetchError(null);
           setLoading(false);
         })
-        .catch(() => {
-          // Fallback to demo data on error
-          const demoClaims = DemoDataManager.getAllClaims();
-          const reviewable = demoClaims.filter((c) =>
-            c.status === "PENDING" || c.status === "REQUEST_INFO"
+        .catch((err) => {
+          setFetchError(
+            `Could not load claims from ${API_BASE_URL} (${err.message}). Is the backend running, and does its CORS allow_origins include this page's exact origin (${typeof window !== "undefined" ? window.location.origin : "?"})?`
           );
-          setClaims(reviewable as any[]);
           setLoading(false);
         });
     }
@@ -197,6 +202,12 @@ export default function ReviewQueuePage() {
       <div className="card overflow-hidden">
         {loading ? (
           <LoadingSpinner message="Loading review queue..." />
+        ) : fetchError ? (
+          <EmptyState
+            icon={<AlertCircle size={48} className="text-red-400" />}
+            title="Could not load claims"
+            description={fetchError}
+          />
         ) : filtered.length === 0 ? (
           <EmptyState
             icon={<CheckCircle2 size={48} />}
