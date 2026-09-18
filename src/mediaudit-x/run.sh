@@ -32,15 +32,23 @@ fi
 # The marker is written only after a successful install, so an install
 # interrupted with Ctrl+C is retried next run instead of skipped; it is
 # also redone when requirements.txt changes.
+# Pinned deps (pydantic 2.9) have no wheels for Python 3.14+, so pick a
+# supported interpreter explicitly rather than whatever python3 is.
+py_ok() { "$1" -c 'import sys; sys.exit(not ((3, 10) <= sys.version_info[:2] <= (3, 13)))' 2>/dev/null; }
+
 MARKER="$BACKEND/venv/.requirements-installed"
+if [[ -x "$BACKEND/venv/bin/python" ]] && ! py_ok "$BACKEND/venv/bin/python"; then
+  log "backend/venv was built with an unsupported Python — rebuilding it"
+  rm -rf "$BACKEND/venv"
+fi
 if [[ ! -f "$MARKER" || "$BACKEND/requirements.txt" -nt "$MARKER" ]]; then
-  PY_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info[0]}.{sys.version_info[1]}")')
-  case "$PY_VERSION" in
-    3.10|3.11|3.12|3.13) ;;
-    *) fail "python3 is $PY_VERSION ($(command -v python3)); need 3.10-3.13. Try: conda create -n mediaudit python=3.12 && conda activate mediaudit" ;;
-  esac
-  log "Installing backend requirements with Python $PY_VERSION (first run takes a few minutes)..."
-  [[ -x "$BACKEND/venv/bin/python" ]] || python3 -m venv "$BACKEND/venv"
+  BASE_PY=""
+  for candidate in ${PYTHON:-} python3.12 python3.13 python3.11 python3.10 python3; do
+    if command -v "$candidate" >/dev/null && py_ok "$candidate"; then BASE_PY="$candidate"; break; fi
+  done
+  [[ -n "$BASE_PY" ]] || fail "No Python 3.10-3.13 found (python3 is $(python3 --version 2>&1)). Install one: brew install python@3.12"
+  log "Installing backend requirements with $("$BASE_PY" --version) (first run takes a few minutes)..."
+  [[ -x "$BACKEND/venv/bin/python" ]] || "$BASE_PY" -m venv "$BACKEND/venv"
   # Old pips miss prebuilt wheels and compile from source, which looks like a hang.
   "$BACKEND/venv/bin/python" -m pip install --upgrade pip
   "$BACKEND/venv/bin/python" -m pip install --prefer-binary -r "$BACKEND/requirements.txt"
