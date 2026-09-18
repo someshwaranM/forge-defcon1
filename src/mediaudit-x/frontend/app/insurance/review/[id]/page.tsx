@@ -8,6 +8,7 @@ import StatusBadge from "../../../components/StatusBadge";
 import Alert from "../../../components/ui/Alert";
 import AIRecommendationCard from "../../../components/claims/AIRecommendationCard";
 import ReviewerDecisionPanel from "../../../components/claims/ReviewerDecisionPanel";
+import AIAgentChat from "../../../components/claims/AIAgentChat";
 import CitationPanel from "../../../components/CitationPanel";
 import ClaimAuditTrail from "../../../components/claims/ClaimAuditTrail";
 
@@ -288,29 +289,35 @@ export default function InsuranceReviewPage() {
                 </div>
               </div>
 
-              {/* Decision Panel */}
-              <ReviewerDecisionPanel
-                claimId={claim.claim_id}
-                aiRecommendation={done.status}
-                currentStatus={claim.status}
-                reviewerComment={claim.reviewer_comment}
-                onDecisionSubmit={async (decision, comment) => {
-                  const res = await fetch(`${API_BASE_URL}/claims/${claim.claim_id}/decision`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      decision: decision === "APPROVED" ? "APPROVE" : decision === "DENIED" ? "DENY" : "REQUEST_INFO",
-                      reviewer_comment: comment,
-                    }),
-                  });
-                  if (!res.ok) {
-                    throw new Error(`Failed to submit decision (${res.status})`);
-                  }
-                  const result = await res.json();
-                  setDone((prev) => (prev ? { ...prev, status: result.status } : prev));
-                  setClaim((prev: any) => (prev ? { ...prev, status: result.status, reviewer_comment: comment } : prev));
-                }}
-              />
+              {/* Decision Panel, with the AI chat right beside it so the
+                  reviewer can ask a question without leaving this tab. */}
+              <div className="grid grid-cols-3 gap-5 items-start">
+                <div className="col-span-2">
+                  <ReviewerDecisionPanel
+                    claimId={claim.claim_id}
+                    aiRecommendation={done.status}
+                    currentStatus={claim.status}
+                    reviewerComment={claim.reviewer_comment}
+                    onDecisionSubmit={async (decision, comment) => {
+                      const res = await fetch(`${API_BASE_URL}/claims/${claim.claim_id}/decision`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          decision: decision === "APPROVED" ? "APPROVE" : decision === "DENIED" ? "DENY" : "REQUEST_INFO",
+                          reviewer_comment: comment,
+                        }),
+                      });
+                      if (!res.ok) {
+                        throw new Error(`Failed to submit decision (${res.status})`);
+                      }
+                      const result = await res.json();
+                      setDone((prev) => (prev ? { ...prev, status: result.status } : prev));
+                      setClaim((prev: any) => (prev ? { ...prev, status: result.status, reviewer_comment: comment } : prev));
+                    }}
+                  />
+                </div>
+                <AIAgentChat claimId={claim.claim_id} />
+              </div>
             </>
           )}
         </div>

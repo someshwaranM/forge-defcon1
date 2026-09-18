@@ -289,30 +289,38 @@ export default function ClaimDetailPage() {
             </div>
           </div>
 
-          {/* Reviewer Decision Panel */}
+          {/* Reviewer Decision Panel, with the AI chat right beside it so a
+              reviewer can ask a question without leaving this tab -- the
+              full "AI Assistant" tab still exists for a larger, dedicated
+              view of the same chat. */}
           {done && canAdjudicate && (
-            <ReviewerDecisionPanel
-              claimId={claim.claim_id}
-              aiRecommendation={done.status}
-              onDecisionSubmit={async (decision, comment) => {
-                const res = await fetch(`${API_BASE_URL}/claims/${claim.claim_id}/decision`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    decision: decision === "APPROVED" ? "APPROVE" : decision === "DENIED" ? "DENY" : "REQUEST_INFO",
-                    reviewer_comment: comment,
-                  }),
-                });
-                if (!res.ok) {
-                  throw new Error(`Failed to submit decision (${res.status})`);
-                }
-                const result = await res.json();
-                // Reflect the human reviewer's decision immediately -- it
-                // supersedes the AI's own recommendation for this claim.
-                setDone((prev) => (prev ? { ...prev, status: result.status } : prev));
-                setClaim((prev: any) => (prev ? { ...prev, status: result.status } : prev));
-              }}
-            />
+            <div className="grid grid-cols-3 gap-5 items-start">
+              <div className="col-span-2">
+                <ReviewerDecisionPanel
+                  claimId={claim.claim_id}
+                  aiRecommendation={done.status}
+                  onDecisionSubmit={async (decision, comment) => {
+                    const res = await fetch(`${API_BASE_URL}/claims/${claim.claim_id}/decision`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        decision: decision === "APPROVED" ? "APPROVE" : decision === "DENIED" ? "DENY" : "REQUEST_INFO",
+                        reviewer_comment: comment,
+                      }),
+                    });
+                    if (!res.ok) {
+                      throw new Error(`Failed to submit decision (${res.status})`);
+                    }
+                    const result = await res.json();
+                    // Reflect the human reviewer's decision immediately -- it
+                    // supersedes the AI's own recommendation for this claim.
+                    setDone((prev) => (prev ? { ...prev, status: result.status } : prev));
+                    setClaim((prev: any) => (prev ? { ...prev, status: result.status } : prev));
+                  }}
+                />
+              </div>
+              <AIAgentChat claimId={claim.claim_id} />
+            </div>
           )}
         </div>
       )}
