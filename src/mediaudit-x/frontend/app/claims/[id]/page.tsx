@@ -30,8 +30,10 @@ import AIRecommendationCard from "../../components/claims/AIRecommendationCard";
 import ClaimStatusTimeline from "../../components/claims/ClaimStatusTimeline";
 import ReviewerDecisionPanel from "../../components/claims/ReviewerDecisionPanel";
 import AIAgentChat from "../../components/claims/AIAgentChat";
+import { DemoDataManager, type DemoInsuranceClaim } from "../../lib/completeDemoData";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+const USE_DEMO_DATA = true; // Set to false when backend is available
 
 type ReasoningStep = { step: string; detail: string };
 type InteractionAlertData = {
@@ -77,10 +79,25 @@ export default function ClaimDetailPage() {
   const [running, setRunning] = useState(false);
 
   useEffect(() => {
-    fetch(`${API_BASE_URL}/claims/${claimId}`)
-      .then((res) => res.json())
-      .then(setClaim)
-      .catch(() => {});
+    if (USE_DEMO_DATA) {
+      // Use demo data
+      const demoClaim = DemoDataManager.getClaim(claimId);
+      if (demoClaim) {
+        setClaim(demoClaim as any);
+      }
+    } else {
+      // Use real API
+      fetch(`${API_BASE_URL}/claims/${claimId}`)
+        .then((res) => res.json())
+        .then(setClaim)
+        .catch(() => {
+          // Fallback to demo data
+          const demoClaim = DemoDataManager.getClaim(claimId);
+          if (demoClaim) {
+            setClaim(demoClaim as any);
+          }
+        });
+    }
   }, [claimId]);
 
   async function runAdjudication() {
@@ -90,6 +107,35 @@ export default function ClaimDetailPage() {
     setDone(null);
     setTab("Adjudication");
 
+    if (USE_DEMO_DATA) {
+      // Simulate AI processing with demo data
+      const demoSteps = [
+        { step: "Policy Search", detail: "Searching for applicable coverage policies..." },
+        { step: "Policy Match Found", detail: `Matched policy: ${claim.payer_name} - Total Knee Arthroplasty Coverage` },
+        { step: "Patient Timeline Analysis", detail: "Analyzing patient's clinical history and treatment timeline..." },
+        { step: "Conservative Treatment Check", detail: "Verifying 180-day conservative treatment requirement..." },
+        { step: "Drug Safety Check", detail: "Checking for medication interactions..." },
+        { step: "Evidence Validation", detail: "Validating supporting clinical documentation..." },
+        { step: "Decision Generation", detail: "Generating recommendation based on policy requirements..." },
+      ];
+
+      for (const step of demoSteps) {
+        await new Promise(resolve => setTimeout(resolve, 800));
+        setSteps((prev) => [...prev, step]);
+      }
+
+      // Get demo AI response
+      const demoResponse = DemoDataManager.getAIResponse(claimId);
+      if (demoResponse) {
+        setDone(demoResponse as any);
+      }
+
+      setRunning(false);
+      setTab("Overview");
+      return;
+    }
+
+    // Real API call
     const response = await fetch(`${API_BASE_URL}/claims/${claimId}/adjudicate`, { method: "POST" });
     if (!response.body) {
       setRunning(false);

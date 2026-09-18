@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import StatusBadge from "../components/StatusBadge";
+import { DemoDataManager, type DemoInsuranceClaim } from "../lib/completeDemoData";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+const USE_DEMO_DATA = true; // Set to false when backend is available
 
 type Claim = {
   id: string;
@@ -24,13 +26,26 @@ export default function ClaimsPage() {
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("All");
 
   useEffect(() => {
-    fetch(`${API_BASE_URL}/claims?limit=200`)
-      .then((res) => res.json())
-      .then((data) => {
-        setClaims(data);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+    if (USE_DEMO_DATA) {
+      // Use demo data from localStorage
+      const demoClaims = DemoDataManager.getAllClaims();
+      setClaims(demoClaims as any[]);
+      setLoading(false);
+    } else {
+      // Use real API
+      fetch(`${API_BASE_URL}/claims?limit=200`)
+        .then((res) => res.json())
+        .then((data) => {
+          setClaims(data);
+          setLoading(false);
+        })
+        .catch(() => {
+          // Fallback to demo data on API error
+          const demoClaims = DemoDataManager.getAllClaims();
+          setClaims(demoClaims as any[]);
+          setLoading(false);
+        });
+    }
   }, []);
 
   const filtered = filter === "All" ? claims : claims.filter((c) => c.status === filter);
@@ -43,7 +58,7 @@ export default function ClaimsPage() {
           <p className="mt-1 text-sm text-slate-500">{claims.length} claims on file</p>
         </div>
         <Link
-          href="/claims/new"
+          href="/hospital/create-claim"
           className="rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-blue-700"
         >
           + New Claim

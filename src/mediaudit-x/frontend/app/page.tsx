@@ -149,7 +149,7 @@ export default function HomePage() {
             <div className="space-y-2">
               {role === "hospital" ? (
                 <>
-                  <QuickAction icon={Upload} label="Create New Claim" href="/claims/new" />
+                  <QuickAction icon={Upload} label="Create New Claim" href="/hospital/create-claim" />
                   <QuickAction icon={FileStack} label="View All Claims" href="/claims" />
                   <QuickAction icon={ShieldCheck} label="View Audit Trail" href="/audit-trail" />
                 </>

@@ -24,6 +24,7 @@ import { useRole } from "../contexts/RoleContext";
 const HOSPITAL_NAV = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/claims", label: "Claims", icon: FileStack },
+  { href: "/hospital/create-claim", label: "Create Claim", icon: Upload },
   { href: "/audit-trail", label: "Audit Trail", icon: ShieldCheck },
   { href: "/settings", label: "Settings", icon: SettingsIcon },
 ];
