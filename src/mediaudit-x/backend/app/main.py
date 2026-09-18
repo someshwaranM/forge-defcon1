@@ -15,7 +15,7 @@ configure_logging()
 from app.config import settings
 from app.indices.create_indices import ensure_indices
 from app.pipeline.ingestion.storage import upload_root
-from app.routers import claims, adjudication, intake, ocr, patients, audit
+from app.routers import chat, claims, adjudication, intake, ocr, patients, audit
 
 UPLOAD_DIR = upload_root()
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -32,6 +32,7 @@ app.add_middleware(
 app.include_router(intake.router)
 app.include_router(claims.router)
 app.include_router(ocr.router)
+app.include_router(chat.router)
 app.include_router(adjudication.router)
 app.include_router(patients.router)
 app.include_router(audit.router)

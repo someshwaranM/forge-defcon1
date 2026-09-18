@@ -21,6 +21,7 @@ class Settings(BaseSettings):
         "elastic_cloud_id", "elastic_api_key", "elastic_url", "elastic_username",
         "elastic_password", "aws_access_key_id", "aws_secret_access_key",
         "aws_session_token", "aws_bearer_token_bedrock", "anthropic_api_key",
+        "kibana_url",
         mode="before",
     )
     @classmethod
@@ -37,6 +38,15 @@ class Settings(BaseSettings):
     elastic_url: str | None = None
     elastic_username: str | None = None
     elastic_password: str | None = None
+
+    # Elastic Agent Builder (app/agent_builder_client.py, app/agent/
+    # chat_agent_builder.py) -- the Kibana URL for this project (distinct
+    # from ELASTIC_URL, which is the Elasticsearch endpoint). Reuses
+    # ELASTIC_API_KEY for auth; Kibana accepts the same Elasticsearch API
+    # key. If unset, the claim chat endpoint falls back to the direct
+    # Bedrock/Anthropic tool-loop in app/agent/chat.py.
+    kibana_url: str | None = None
+    chat_provider: str = "agent_builder"  # "agent_builder" | "bedrock"
 
     # LLM provider: "bedrock" (default -- AWS is a hackathon sponsor, use
     # their platform) or "anthropic" (direct Anthropic API, e.g. for local

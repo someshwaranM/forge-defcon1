@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { Send, Sparkles, FileText, Bot, User } from "lucide-react";
 import Button from "../ui/Button";
-import LoadingSpinner from "../ui/LoadingSpinner";
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
 interface Message {
   id: string;
@@ -15,6 +16,7 @@ interface Message {
     description: string;
   }[];
   timestamp: Date;
+  isError?: boolean;
 }
 
 interface AIAgentChatProps {
@@ -36,6 +38,12 @@ export default function AIAgentChat({ claimId, isExpanded = false }: AIAgentChat
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  // Only meaningful for the Agent Builder backend, which keeps
+  // conversation state server-side -- passing it back lets a follow-up
+  // question ("what severity is that?") resolve without resending full
+  // claim context. The Bedrock backend ignores it and uses `history`
+  // instead; harmless to send either way.
+  const [conversationId, setConversationId] = useState<string | null>(null);
 
   const handleSend = async (question?: string) => {
     const messageText = question || input.trim();
@@ -48,22 +56,49 @@ export default function AIAgentChat({ claimId, isExpanded = false }: AIAgentChat
       timestamp: new Date(),
     };
 
+    // Prior turns as {role, content} only -- used by the Bedrock backend,
+    // which re-sends full claim/adjudication context on every call.
+    const history = messages.map((m) => ({ role: m.role, content: m.content }));
+
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setLoading(true);
 
-    // Simulate AI response (replace with actual API call)
-    setTimeout(() => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/claims/${claimId}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: messageText, history, conversation_id: conversationId }),
+      });
+      if (!res.ok) {
+        throw new Error(`Request failed (${res.status})`);
+      }
+      const data = await res.json();
+      if (data.conversation_id) {
+        setConversationId(data.conversation_id);
+      }
       const aiResponse: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: getDemoResponse(messageText),
-        citations: getDemoCitations(messageText),
+        content: data.answer,
+        citations: data.citations,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, aiResponse]);
+    } catch {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: "I couldn't reach the claim assistant just now. Please try again.",
+          timestamp: new Date(),
+          isError: true,
+        },
+      ]);
+    } finally {
       setLoading(false);
-    }, 1500);
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -83,12 +118,6 @@ export default function AIAgentChat({ claimId, isExpanded = false }: AIAgentChat
         <div>
           <h3 className="text-sm font-semibold text-slate-900">AI Claim Assistant</h3>
           <p className="text-xs text-slate-500">Ask questions about {claimId}</p>
-        </div>
-        <div className="ml-auto">
-          <div className="flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1">
-            <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-            <span className="text-xs font-medium text-emerald-700">Connected</span>
-          </div>
         </div>
       </div>
 
@@ -134,6 +163,8 @@ export default function AIAgentChat({ claimId, isExpanded = false }: AIAgentChat
                     className={`rounded-lg px-4 py-2.5 ${
                       message.role === "user"
                         ? "bg-blue-600 text-white"
+                        : message.isError
+                        ? "bg-red-50 text-red-700 border border-red-200"
                         : "bg-slate-100 text-slate-800"
                     }`}
                   >
@@ -216,129 +247,3 @@ export default function AIAgentChat({ claimId, isExpanded = false }: AIAgentChat
   );
 }
 
-// Demo responses (replace with actual API integration)
-function getDemoResponse(question: string): string {
-  const q = question.toLowerCase();
-
-  if (q.includes("conservative treatment") || q.includes("treatment requirement")) {
-    return `Yes. The available clinical records support the requirement.
-
-**Why:**
-The applicable policy requires at least 180 days of conservative treatment.
-
-The patient timeline contains:
-• Jan 12 — Physical therapy started
-• Jul 18 — Physical therapy documented
-
-Observed interval: 187 days
-
-**Conclusion:**
-Requirement: SATISFIED`;
-  }
-
-  if (q.includes("why") && (q.includes("approval") || q.includes("approve"))) {
-    return `This claim is recommended for approval because the required policy criteria identified for this claim are supported by the available evidence.
-
-**Verified:**
-✓ Diagnosis requirement satisfied
-✓ Conservative treatment documented
-✓ Treatment duration requirement met
-✓ Imaging evidence available
-
-**Important:**
-The recommendation remains advisory and requires final reviewer approval.`;
-  }
-
-  if (q.includes("medication") || q.includes("drug interaction")) {
-    return `No relevant drug interactions were identified in the available interaction dataset for the medications reviewed.
-
-**Note:**
-This does not establish that the medications are universally safe for the patient. The reviewer should consider the complete clinical context.
-
-**Medications checked:**
-• Metformin 500mg
-• Losartan 50mg
-
-**Interaction database:**
-FDA RxNorm interaction pairs`;
-  }
-
-  if (q.includes("evidence") || q.includes("diagnosis")) {
-    return `The diagnosis is supported by clinical documentation and imaging evidence.
-
-**Supporting evidence:**
-• Clinical notes documenting osteoarthritis
-• MRI report showing severe degeneration
-• Physical examination findings
-• Patient-reported symptoms
-
-**ICD-10 Code:**
-M17.11 - Unilateral primary osteoarthritis, right knee
-
-**Confidence:**
-High - Multiple corroborating sources`;
-  }
-
-  if (q.includes("timeline")) {
-    return `The patient's treatment timeline shows the following key events:
-
-**Jan 12, 2026** - Initial diagnosis of osteoarthritis
-**Feb-Jul 2026** - Multiple physical therapy sessions (6 documented)
-**May 20, 2026** - MRI performed, showing severe degeneration
-**Aug 3, 2026** - Surgical intervention requested
-
-**Duration of conservative treatment:**
-187 days (exceeds 180-day requirement)
-
-**View detailed timeline in the "Clinical History" tab.**`;
-  }
-
-  if (q.includes("policy") || q.includes("requirement") || q.includes("uncertain")) {
-    return `Most policy requirements have been verified. One requirement needs attention:
-
-**Satisfied requirements:**
-✓ Diagnosis requirement
-✓ Conservative treatment
-✓ Treatment duration
-✓ Failed conservative therapy documented
-
-**Needs review:**
-⚠️ MRI documentation - Document is attached but requires manual verification for specific findings.
-
-**Recommendation:**
-Review the MRI report in the "Policy & Guidelines" tab to confirm it meets the policy's imaging criteria.`;
-  }
-
-  // Default response
-  return `I can help answer questions about this claim's evidence, policy requirements, treatment history, and medication safety.
-
-Try asking:
-• Was [specific requirement] satisfied?
-• What evidence supports [aspect of claim]?
-• Are there any concerns with [topic]?
-• Show me details about [specific area]
-
-How can I assist you with this claim?`;
-}
-
-function getDemoCitations(question: string): { id: string; type: string; description: string }[] {
-  const q = question.toLowerCase();
-
-  if (q.includes("treatment") || q.includes("requirement")) {
-    return [
-      { id: "EV-18291", type: "clinical_note", description: "PT note — Jan 12, 2026" },
-      { id: "EV-19281", type: "clinical_note", description: "PT note — Jul 18, 2026" },
-      { id: "POL-042-4.2", type: "policy", description: "Policy section 4.2: Conservative treatment requirement" },
-    ];
-  }
-
-  if (q.includes("evidence") || q.includes("diagnosis")) {
-    return [
-      { id: "EV-12093", type: "clinical_note", description: "Clinical examination — Jan 12, 2026" },
-      { id: "EV-15822", type: "imaging", description: "MRI report — May 20, 2026" },
-      { id: "ICD-M17.11", type: "code", description: "ICD-10: M17.11" },
-    ];
-  }
-
-  return [];
-}
