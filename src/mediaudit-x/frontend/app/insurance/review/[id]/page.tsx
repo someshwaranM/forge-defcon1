@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ArrowLeft, Clock, Play, FileText, AlertCircle, CheckCircle, User, Calendar, DollarSign, Activity } from "lucide-react";
 import StatusBadge from "../../../components/StatusBadge";
 import Alert from "../../../components/ui/Alert";
+import LoadingSpinner from "../../../components/ui/LoadingSpinner";
 import AIRecommendationCard from "../../../components/claims/AIRecommendationCard";
 import ReviewerDecisionPanel from "../../../components/claims/ReviewerDecisionPanel";
 import AIAgentChat from "../../../components/claims/AIAgentChat";
@@ -139,10 +140,7 @@ export default function InsuranceReviewPage() {
   if (loading) {
     return (
       <div className="flex min-h-[400px] items-center justify-center">
-        <div className="text-center">
-          <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-b-2 border-blue-600"></div>
-          <p className="text-slate-600">Loading claim...</p>
-        </div>
+        <LoadingSpinner size={32} message="Loading claim..." />
       </div>
     );
   }

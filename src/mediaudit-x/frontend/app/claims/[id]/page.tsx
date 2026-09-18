@@ -23,6 +23,7 @@ import {
   FileText,
   Link as LinkIcon,
 } from "lucide-react";
+import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import Timeline from "../../components/Timeline";
 import CitationPanel from "../../components/CitationPanel";
 import InteractionAlert from "../../components/InteractionAlert";
@@ -184,7 +185,7 @@ export default function ClaimDetailPage() {
     setRunning(false);
   }
 
-  if (!claim) return <p className="p-6 text-sm text-slate-400">Loading claim...</p>;
+  if (!claim) return <LoadingSpinner message="Loading claim..." />;
 
   const hasContraindication = alerts.some((a) => a.severity === "Contraindicated" || a.severity === "Major");
   const riskLevel = done ? (done.status === "DENIED" ? "High" : done.status === "REQUEST_INFO" ? "Medium" : "Low") : null;

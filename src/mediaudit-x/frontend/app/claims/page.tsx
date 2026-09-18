@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import StatusBadge from "../components/StatusBadge";
+import LoadingSpinner from "../components/ui/LoadingSpinner";
 import { DemoDataManager, type DemoInsuranceClaim } from "../lib/completeDemoData";
 import { useRole } from "../contexts/RoleContext";
 
@@ -109,7 +110,7 @@ export default function ClaimsPage() {
 
       <div className="card overflow-hidden">
         {loading ? (
-          <p className="p-8 text-center text-sm text-slate-400">Loading claims...</p>
+          <LoadingSpinner message="Loading claims..." />
         ) : fetchError ? (
           <p className="p-8 text-center text-sm text-red-500">{fetchError}</p>
         ) : filtered.length === 0 ? (

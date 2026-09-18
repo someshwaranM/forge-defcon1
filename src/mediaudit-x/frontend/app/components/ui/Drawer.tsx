@@ -41,11 +41,12 @@ export default function Drawer({ open, onClose, title, children, position = "rig
 
   return (
     <div className="fixed inset-0 z-50 flex">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      {/* Backdrop -- blurred so the drawer reads as clearly "in front of"
+          the app, not just a dark sheet over it */}
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-in" onClick={onClose} />
 
       {/* Drawer */}
-      <div className={`absolute ${positionClasses} top-0 h-full w-full ${sizeClasses[size]} bg-white shadow-2xl z-10 flex flex-col`}>
+      <div className={`absolute ${positionClasses} top-0 h-full w-full ${sizeClasses[size]} bg-white shadow-2xl z-10 flex flex-col animate-slide-up`}>
         {/* Header */}
         {title && (
           <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">

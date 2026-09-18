@@ -12,6 +12,7 @@ import { FileStack, Clock, XCircle, CheckCircle2, Upload, Search, ShieldCheck, C
 import StatCard from "./components/StatCard";
 import StatusBadge from "./components/StatusBadge";
 import DonutChart from "./components/DonutChart";
+import LoadingSpinner from "./components/ui/LoadingSpinner";
 import { useRole } from "./contexts/RoleContext";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
@@ -103,7 +104,7 @@ export default function HomePage() {
             </Link>
           </div>
           {loading ? (
-            <p className="py-8 text-center text-sm text-slate-400">Loading claims...</p>
+            <LoadingSpinner size={20} className="py-8" message="Loading claims..." />
           ) : fetchError ? (
             <p className="py-8 text-center text-sm text-red-500">{fetchError}</p>
           ) : claims.length === 0 ? (

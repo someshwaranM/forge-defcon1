@@ -40,11 +40,12 @@ export default function Modal({ open, onClose, title, children, footer, size = "
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      {/* Backdrop -- blurred so the modal reads as clearly "in front of"
+          the app, not just a dark sheet over it */}
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-in" onClick={onClose} />
 
       {/* Modal */}
-      <div className={`relative z-10 w-full ${sizeClasses[size]} mx-4`}>
+      <div className={`relative z-10 w-full ${sizeClasses[size]} mx-4 animate-scale-in`}>
         <div className="card overflow-hidden">
           {/* Header */}
           {title && (
