@@ -105,6 +105,15 @@ class Settings(BaseSettings):
     # e.g. "https://app.example.com,http://187.77.130.9:3000". "*" allows any.
     cors_origins: str = "http://localhost:3000"
 
+    # Logging/monitoring (app/observability/). Every module logs via
+    # logging.getLogger(__name__) under the "app.*" namespace; log_level
+    # sets that namespace's threshold (uvicorn/elasticsearch-py/boto3's
+    # own loggers are untouched). log_to_elasticsearch ships the same
+    # records to the app-logs index for Kibana -- turn off for local dev
+    # if you don't want per-request docs landing on a shared cluster.
+    log_level: str = "INFO"
+    log_to_elasticsearch: bool = True
+
     # Document ingestion (app/pipeline/ingestion). Limits are enforced by
     # the checks in app/pipeline/ingestion/checks.py.
     upload_dir: str | None = None  # default: backend/uploads

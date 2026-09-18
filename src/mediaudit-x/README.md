@@ -23,6 +23,17 @@ source, rather than left to LLM inference alone.
   to `document-chunks` (with embeddings, ready for the same RRF hybrid
   search pattern policy matching uses) so every extracted fact can cite
   back to `(doc_id, page, char_start, char_end)`.
+- **Logging & monitoring** (`observability/`, see `MONITORING.md`) — not
+  part of the original stage plan, added afterward once the codebase had
+  routers/pipelines converting most errors to clean HTTP responses but
+  nothing actually visible when something unexpected went wrong. Every
+  request and every `logger.x(...)` call anywhere in `app/` is
+  structured-JSON logged to stdout and (optionally) shipped to a new
+  `app-logs` Elasticsearch index, correlated by `request_id`/`claim_id`,
+  off a background thread so an Elasticsearch write never blocks the
+  request it's describing. Deliberately a separate index from
+  `ARCHITECTURE.md`'s planned business-domain `alerts` index (Stage 10) —
+  this is infra/app observability, not claims-review alerting.
 - **Clinical trajectory search** (`trajectory_tool.py`) — a real ES|QL
   bi-temporal query (with a DSL aggregation fallback) that verifies
   step-therapy timelines against actual longitudinal patient history,
@@ -117,6 +128,13 @@ source, rather than left to LLM inference alone.
 
 ## Known limitations
 
+- **Logging/monitoring can lose the tail end of its logs on a hard
+  process kill** (the background shipper thread is a daemon thread by
+  design, flushed on a clean shutdown but not on `kill -9`), and
+  **request duration on the SSE adjudication endpoint only measures
+  time-to-first-byte, not the full streamed session** (a
+  `BaseHTTPMiddleware` limitation). Neither affects `audit-ledger`, which
+  is what actually needs to never lose an entry. See `MONITORING.md` §6.
 - **On this project's real Elastic Cloud Serverless cluster, `dense_vector`
   fields (`policy_vector`, `notes_vector`, `document-chunks.text_vector`)
   never come back in `_source` — not via `GET`, not via `_search` hits —
@@ -311,6 +329,7 @@ backend/app/
   pipeline/
     ingestion/    document upload -> checks -> storage -> claim-files/claim-documents (see INGESTION.md)
     ocr/          claim-documents (PENDING) -> extract + chunk -> document-pages/document-chunks
+  observability/  structured logging (stdout + app-logs), request middleware (see MONITORING.md)
   agent/          orchestrator.py — the agent loop
   tools/          trajectory / policy matcher / drug interaction / audit ledger
   actuators/      letter + FHIR ClaimResponse generation
