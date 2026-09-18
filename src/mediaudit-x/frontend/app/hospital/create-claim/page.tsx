@@ -811,11 +811,11 @@ function StepIndicator({ number, label, active, completed }: { number: number; l
   );
 }
 
-function FormField({ label,, className = "", children }: { label: string;?: boolean; className?: string; children: React.ReactNode }) {
+function FormField({ label, className = "", children }: { label: string; className?: string; children: React.ReactNode }) {
   return (
     <div className={className}>
       <label className="block text-sm font-medium text-slate-700 mb-1.5">
-        {label} {required && <span className="text-red-500">*</span>}
+        {label}
       </label>
       {children}
     </div>
