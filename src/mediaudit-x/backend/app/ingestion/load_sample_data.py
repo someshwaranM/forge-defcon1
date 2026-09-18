@@ -42,7 +42,11 @@ INDEX_TO_ID_FIELD = {
 def _backfill_vector(index: str, doc: dict) -> dict:
     if index == "fhir-clinical-ehr":
         text = " ".join(filter(None, [doc.get("code_display"), doc.get("clinician_notes")]))
-        doc["notes_vector"] = embed_text(text)
+        vector = embed_text(text)
+        # dot_product fields reject the all-zero vector embed_text returns
+        # for empty text; leave the field out for those docs instead.
+        if any(vector):
+            doc["notes_vector"] = vector
     elif index == "medical-policies":
         text = " ".join(filter(None, [
             doc.get("title"), doc.get("clinical_indications"), doc.get("contraindications"),

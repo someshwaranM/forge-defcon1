@@ -35,6 +35,24 @@ def append_entry(claim_id: str, adjudication_id: str, payload: dict) -> dict:
     Appends a new hash-chained entry for this claim's adjudication.
     Returns the ledger entry that was written.
     """
+    return _append(claim_id, payload, {"adjudication_id": adjudication_id})
+
+
+def append_event(claim_id: str, event_type: str, payload: dict, ref_id: str | None = None) -> dict:
+    """
+    Appends a non-adjudication pipeline event (CLAIM_CREATED,
+    DOCUMENT_UPLOADED, ...) to the same per-claim chain, with the same
+    hash rule as append_entry. event_type is folded into the hashed
+    payload so relabelling an event also breaks the chain.
+    """
+    return _append(
+        claim_id,
+        {"event_type": event_type, **payload},
+        {"event_type": event_type, "ref_id": ref_id},
+    )
+
+
+def _append(claim_id: str, payload: dict, extra_fields: dict) -> dict:
     es = get_es_client()
     last_entry = _get_last_entry(es, claim_id)
 
@@ -47,14 +65,16 @@ def append_entry(claim_id: str, adjudication_id: str, payload: dict) -> dict:
 
     entry = {
         "ledger_id": str(uuid4()),
-        "adjudication_id": adjudication_id,
+        **extra_fields,
         "claim_id": claim_id,
         "record_hash": record_hash,
         "prev_hash": prev_hash,
         "sequence_number": sequence_number,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
-    es.index(index=LEDGER_INDEX, document=entry)
+    # wait_for: the next append's _get_last_entry search must see this
+    # entry, otherwise back-to-back appends reuse the same sequence number.
+    es.index(index=LEDGER_INDEX, document=entry, refresh="wait_for")
     return entry
 
 

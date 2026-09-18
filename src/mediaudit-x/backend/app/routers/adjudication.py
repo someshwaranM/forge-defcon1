@@ -13,6 +13,7 @@ from fastapi import APIRouter, HTTPException
 from sse_starlette.sse import EventSourceResponse
 
 from app.es_client import get_es_client
+from app.indices.names import ALL_CLAIMS
 from app.agent.orchestrator import adjudicate_claim
 
 router = APIRouter(prefix="/claims", tags=["adjudication"])
@@ -21,9 +22,10 @@ router = APIRouter(prefix="/claims", tags=["adjudication"])
 def _load_claim(claim_id: str) -> dict:
     es = get_es_client()
     result = es.search(
-        index="insurance-claims",
+        index=ALL_CLAIMS,
         query={"term": {"claim_id": claim_id}},
         size=1,
+        ignore_unavailable=True,
     )
     hits = result["hits"]["hits"]
     if not hits:
