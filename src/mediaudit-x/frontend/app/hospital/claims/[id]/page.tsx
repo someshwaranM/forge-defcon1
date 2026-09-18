@@ -5,6 +5,15 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, FileText, Calendar, User, Building2, DollarSign, CheckCircle, Clock } from "lucide-react";
 import StatusBadge from "../../../components/StatusBadge";
+import DocumentsPanel from "../../../components/DocumentsPanel";
+
+type Review = {
+  decision?: string;
+  status: string;
+  comment: string;
+  reviewer_name?: string;
+  decided_at?: string;
+};
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
@@ -16,6 +25,9 @@ export default function HospitalClaimViewPage() {
   const [claim, setClaim] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  // Decisions made before the claim record stored latest_review only exist
+  // in adjudication-results; this fallback reads the newest one from there.
+  const [legacyReview, setLegacyReview] = useState<Review | null>(null);
 
   useEffect(() => {
     // Fetch claim details from API
@@ -27,6 +39,21 @@ export default function HospitalClaimViewPage() {
       .then((data) => {
         setClaim(data);
         setLoading(false);
+        if (!data.latest_review) {
+          fetch(`${API_BASE_URL}/claims/${claimId}/adjudications`)
+            .then((res) => (res.ok ? res.json() : null))
+            .then((adj) => {
+              if (adj?.decision_type === "HUMAN_REVIEW" && adj.reviewer_comment) {
+                setLegacyReview({
+                  status: adj.status,
+                  comment: adj.reviewer_comment,
+                  reviewer_name: adj.decided_by,
+                  decided_at: adj.decided_at,
+                });
+              }
+            })
+            .catch(() => {});
+        }
       })
       .catch((error) => {
         console.error("Error fetching claim:", error);
@@ -74,6 +101,20 @@ export default function HospitalClaimViewPage() {
           </div>
         </div>
       </div>
+
+      <InsuranceDecision
+        latest={claim.latest_review || legacyReview}
+        history={claim.review_history || []}
+      />
+
+      {claim.status === "REQUEST_INFO" && (
+        <DocumentsPanel
+          claimId={claim.claim_id}
+          claimStatus={claim.status}
+          apiBaseUrl={API_BASE_URL}
+          onClaimChanged={(updated) => updated && setClaim((prev: any) => ({ ...prev, ...updated }))}
+        />
+      )}
 
       {/* Read-Only Notice */}
       <div className="card border-2 border-blue-200 bg-blue-50 p-4">
@@ -262,6 +303,63 @@ export default function HospitalClaimViewPage() {
       <div className="text-center text-sm text-slate-500 pb-6">
         <p>If you have questions about this claim, please contact your insurance provider.</p>
       </div>
+    </div>
+  );
+}
+
+const DECISION_STYLES: Record<string, { box: string; title: string; label: string }> = {
+  APPROVED: { box: "border-emerald-200 bg-emerald-50", title: "text-emerald-900", label: "Approved by insurance" },
+  DENIED: { box: "border-red-200 bg-red-50", title: "text-red-900", label: "Denied by insurance" },
+  REQUEST_INFO: {
+    box: "border-amber-200 bg-amber-50",
+    title: "text-amber-900",
+    label: "Insurance requested more information",
+  },
+};
+
+/** The insurance reviewer's decision and comment, newest first. */
+function InsuranceDecision({ latest, history }: { latest: Review | null; history: Review[] }) {
+  if (!latest) return null;
+  const style = DECISION_STYLES[latest.status] || {
+    box: "border-slate-200 bg-slate-50",
+    title: "text-slate-900",
+    label: `Insurance decision: ${latest.status}`,
+  };
+  const earlier = history.filter((r) => r.decided_at !== latest.decided_at).reverse();
+
+  return (
+    <div className={`card border-2 p-5 ${style.box}`}>
+      <div className="flex items-center justify-between">
+        <h2 className={`text-lg font-semibold ${style.title}`}>{style.label}</h2>
+        <StatusBadge status={latest.status} />
+      </div>
+      <div className="mt-3 rounded-lg bg-white/70 p-3 text-sm text-slate-800 whitespace-pre-wrap">{latest.comment}</div>
+      <div className="mt-2 text-xs text-slate-500">
+        {latest.reviewer_name || "Insurance reviewer"}
+        {latest.decided_at && ` · ${new Date(latest.decided_at).toLocaleString()}`}
+      </div>
+      {latest.status === "REQUEST_INFO" && (
+        <p className="mt-3 text-sm text-amber-800">
+          Upload the requested documents below; the claim goes back for review once they are added.
+        </p>
+      )}
+      {earlier.length > 0 && (
+        <div className="mt-4 border-t border-black/5 pt-3">
+          <div className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">Earlier decisions</div>
+          <ul className="space-y-2">
+            {earlier.map((r, i) => (
+              <li key={i} className="text-sm text-slate-700">
+                <span className="font-medium">{r.status}</span> — {r.comment}
+                <span className="text-xs text-slate-500">
+                  {" "}
+                  · {r.reviewer_name || "Insurance reviewer"}
+                  {r.decided_at && `, ${new Date(r.decided_at).toLocaleString()}`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

@@ -149,6 +149,11 @@ def get_latest_adjudication(claim_id: str):
         "decided_at": doc.get("decided_at"),
         "matched_policy": doc.get("matched_policy"),
         "trajectory_result": doc.get("trajectory_result"),
+        # Present on human reviewer decisions (decision_type=HUMAN_REVIEW);
+        # the hospital claim view falls back to these for older claims.
+        "decision_type": doc.get("decision_type"),
+        "reviewer_comment": doc.get("reviewer_comment"),
+        "decided_by": doc.get("decided_by"),
     }
 
 
@@ -178,13 +183,6 @@ def submit_reviewer_decision(claim_id: str, body: ReviewerDecision):
     hit = _find_claim(es, claim_id)
     status = _DECISION_TO_STATUS[body.decision]
 
-    es.update_by_query(
-        index=hit["_index"],
-        query={"term": {"claim_id": claim_id}},
-        script={"source": "ctx._source.status = params.status", "params": {"status": status}},
-        refresh=True,
-    )
-
     ai_result = es.search(
         index="adjudication-results",
         query={"term": {"claim_id": claim_id}},
@@ -211,6 +209,34 @@ def submit_reviewer_decision(claim_id: str, body: ReviewerDecision):
         "ai_recommended_status": ai_status,
     }
     es.index(index="adjudication-results", document=decision_doc, refresh="wait_for")
+
+    # The reviewer's decision also lives on the claim record itself, so the
+    # hospital side (which reads GET /claims/{id}) sees the status, comment
+    # and who decided -- latest_review for display, review_history for the
+    # full back-and-forth (e.g. REQUEST_INFO, then a later APPROVE).
+    review = {
+        "decision": body.decision,
+        "status": status,
+        "comment": body.reviewer_comment,
+        "reviewer_name": body.reviewer_name,
+        "decided_at": decided_at,
+        "adjudication_id": adjudication_id,
+        "ai_recommended_status": ai_status,
+    }
+    es.update_by_query(
+        index=hit["_index"],
+        query={"term": {"claim_id": claim_id}},
+        script={
+            "source": (
+                "ctx._source.status = params.status;"
+                "ctx._source.latest_review = params.review;"
+                "if (ctx._source.review_history == null) { ctx._source.review_history = []; }"
+                "ctx._source.review_history.add(params.review);"
+            ),
+            "params": {"status": status, "review": review},
+        },
+        refresh=True,
+    )
 
     ledger_entry = append_event(
         claim_id,
