@@ -26,6 +26,10 @@ import Timeline from "../../components/Timeline";
 import CitationPanel from "../../components/CitationPanel";
 import InteractionAlert from "../../components/InteractionAlert";
 import StatusBadge from "../../components/StatusBadge";
+import AIRecommendationCard from "../../components/claims/AIRecommendationCard";
+import ClaimStatusTimeline from "../../components/claims/ClaimStatusTimeline";
+import ReviewerDecisionPanel from "../../components/claims/ReviewerDecisionPanel";
+import AIAgentChat from "../../components/claims/AIAgentChat";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
@@ -48,7 +52,7 @@ type DoneEvent = {
   trajectory_result?: any;
 };
 
-const TABS = ["Overview", "Clinical History", "Policy & Guidelines", "Adjudication", "Audit Trail"] as const;
+const TABS = ["Overview", "Clinical History", "Policy & Guidelines", "AI Assistant", "Adjudication", "Audit Trail"] as const;
 
 function parseSSEEvent(chunk: string): { event: string; data: string } | null {
   const lines = chunk.split("\n");
@@ -170,6 +174,9 @@ export default function ClaimDetailPage() {
         <Field label="Submitted" value={claim.submitted_date} />
       </div>
 
+      {/* Status Timeline */}
+      <ClaimStatusTimeline currentStatus={done?.status || claim.status} />
+
       {alerts.length > 0 && <InteractionAlert alerts={alerts} />}
 
       {done?.status === "DENIED" && riskReason && (
@@ -195,59 +202,46 @@ export default function ClaimDetailPage() {
       </div>
 
       {tab === "Overview" && (
-        <div className="grid grid-cols-3 gap-5">
-          <div className="card col-span-2 p-5">
-            <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-800">
-              <FileText size={15} /> Claim Summary
-            </h2>
-            {done ? (
-              <pre className="whitespace-pre-wrap rounded-lg bg-slate-50 p-4 text-xs leading-relaxed text-slate-700">
-                {done.generated_letter}
-              </pre>
-            ) : (
-              <p className="text-sm text-slate-400">Run adjudication to generate a decision summary and letter.</p>
-            )}
-          </div>
-
-          <div className="space-y-5">
-            <div className="card p-5">
-              <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-800">
-                <Sparkles size={15} /> AI Analysis
-              </h2>
-              {done ? (
-                <div className="space-y-1.5 text-sm text-slate-600">
-                  <div className="flex items-center gap-1.5 text-emerald-600">
-                    <CheckCircle2 size={14} /> Evidence retrieved
-                  </div>
-                  <div>Found {done.cited_evidence.length} cited source(s)</div>
-                  <div>Matched policy: {done.matched_policy?.policy_id || "none"}</div>
-                  <div>Interaction check: {alerts.length > 0 ? `${alerts.length} alert(s)` : "none found"}</div>
-                </div>
-              ) : (
-                <p className="text-sm text-slate-400">Not run yet.</p>
-              )}
+        <div className="space-y-5">
+          {/* AI Recommendation and Summary Row */}
+          <div className="grid grid-cols-3 gap-5">
+            <div className="col-span-2">
+              <div className="card p-5">
+                <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-800">
+                  <FileText size={15} /> Claim Summary
+                </h2>
+                {done ? (
+                  <pre className="whitespace-pre-wrap rounded-lg bg-slate-50 p-4 text-xs leading-relaxed text-slate-700">
+                    {done.generated_letter}
+                  </pre>
+                ) : (
+                  <p className="text-sm text-slate-400">Run adjudication to generate a decision summary and letter.</p>
+                )}
+              </div>
             </div>
 
-            <div className="card p-5">
-              <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-800">
-                <ShieldAlert size={15} /> Risk Assessment
-              </h2>
-              {riskLevel ? (
-                <div>
-                  <span
-                    className={`badge ${
-                      riskLevel === "High" ? "badge-denied" : riskLevel === "Medium" ? "badge-pending" : "badge-approved"
-                    }`}
-                  >
-                    {riskLevel}
-                  </span>
-                  {riskReason && <p className="mt-2 text-sm text-slate-600">{riskReason}</p>}
-                </div>
-              ) : (
-                <p className="text-sm text-slate-400">Not assessed yet.</p>
-              )}
+            <div>
+              <AIRecommendationCard
+                status={done?.status}
+                matchedPolicy={done?.matched_policy}
+                trajectoryResult={done?.trajectory_result}
+                evidenceCount={done?.cited_evidence?.length || 0}
+                interactionCount={alerts.length}
+              />
             </div>
           </div>
+
+          {/* Reviewer Decision Panel */}
+          {done && (
+            <ReviewerDecisionPanel
+              claimId={claim.claim_id}
+              aiRecommendation={done.status}
+              onDecisionSubmit={(decision, comment) => {
+                console.log("Decision submitted:", decision, comment);
+                // TODO: Implement API call to submit decision
+              }}
+            />
+          )}
         </div>
       )}
 
@@ -274,6 +268,10 @@ export default function ClaimDetailPage() {
           )}
           {policyEvidence.length > 0 && <CitationPanel evidence={policyEvidence} />}
         </div>
+      )}
+
+      {tab === "AI Assistant" && (
+        <AIAgentChat claimId={claim.claim_id} isExpanded />
       )}
 
       {tab === "Adjudication" && (

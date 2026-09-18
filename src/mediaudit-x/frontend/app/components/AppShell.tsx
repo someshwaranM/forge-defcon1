@@ -13,11 +13,26 @@ import {
   Search,
   Bell,
   ChevronDown,
+  MessageSquare,
+  ClipboardList,
+  Building2,
+  UserCircle,
 } from "lucide-react";
+import { useRole } from "../contexts/RoleContext";
 
-const NAV_ITEMS = [
-  { href: "/", label: "Home", icon: LayoutDashboard },
+// Hospital navigation
+const HOSPITAL_NAV = [
+  { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/claims", label: "Claims", icon: FileStack },
+  { href: "/audit-trail", label: "Audit Trail", icon: ShieldCheck },
+  { href: "/settings", label: "Settings", icon: SettingsIcon },
+];
+
+// Insurance reviewer navigation
+const INSURANCE_NAV = [
+  { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/claims", label: "Claims", icon: FileStack },
+  { href: "/review-queue", label: "Review Queue", icon: ClipboardList },
   { href: "/patient-timeline", label: "Patient Timeline", icon: History },
   { href: "/policy-lookup", label: "Policy Lookup", icon: BookOpenCheck },
   { href: "/audit-trail", label: "Audit Trail", icon: ShieldCheck },
@@ -27,6 +42,9 @@ const NAV_ITEMS = [
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { role, setRole, userName, userTitle } = useRole();
+
+  const NAV_ITEMS = role === "hospital" ? HOSPITAL_NAV : INSURANCE_NAV;
 
   return (
     <div className="flex min-h-screen bg-slate-50">
@@ -59,9 +77,28 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        <div className="mx-3 mb-5 rounded-lg bg-white/5 p-3 text-xs text-slate-400">
-          <div className="font-medium text-slate-200">AI-Powered Clinical Auditing</div>
-          <div className="mt-0.5">Elastic hybrid search + ES|QL trajectory reasoning</div>
+        {/* Role and User Info */}
+        <div className="border-t border-white/10 mx-3 mb-3 pt-3">
+          <div className="flex items-center gap-2 mb-2">
+            {role === "hospital" ? (
+              <Building2 size={14} className="text-slate-400" />
+            ) : (
+              <UserCircle size={14} className="text-slate-400" />
+            )}
+            <div className="text-xs text-slate-400">
+              {role === "hospital" ? "Hospital Portal" : "Insurance Reviewer"}
+            </div>
+          </div>
+          <div className="text-sm font-medium text-slate-200">{userName}</div>
+          <div className="text-xs text-slate-400 mt-0.5">{userTitle}</div>
+
+          {/* Demo: Role Switcher */}
+          <button
+            onClick={() => setRole(role === "hospital" ? "insurance" : "hospital")}
+            className="mt-3 w-full rounded-md bg-white/5 px-2 py-1.5 text-xs text-slate-300 hover:bg-white/10 transition-colors"
+          >
+            Switch to {role === "hospital" ? "Insurance" : "Hospital"}
+          </button>
         </div>
       </aside>
 
@@ -84,11 +121,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             </button>
             <div className="flex items-center gap-2 pl-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white">
-                SM
+                {role === "hospital" ? "CC" : "SM"}
               </div>
               <div className="leading-tight">
-                <div className="text-sm font-medium text-slate-800">Dr. Sarah Mitchell</div>
-                <div className="text-xs text-slate-400">Medical Director (demo user)</div>
+                <div className="text-sm font-medium text-slate-800">{userName}</div>
+                <div className="text-xs text-slate-400">{userTitle}</div>
               </div>
               <ChevronDown size={14} className="text-slate-400" />
             </div>

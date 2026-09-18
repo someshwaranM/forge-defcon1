@@ -1,5 +1,6 @@
 import "./globals.css";
 import AppShell from "./components/AppShell";
+import { RoleProvider } from "./contexts/RoleContext";
 
 export const metadata = {
   title: "MediAudit-X",
@@ -14,7 +15,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <AppShell>{children}</AppShell>
+        <RoleProvider>
+          <AppShell>{children}</AppShell>
+        </RoleProvider>
       </body>
     </html>
   );
