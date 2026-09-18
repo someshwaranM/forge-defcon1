@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Filter, Search, CheckCircle2, AlertCircle, Clock, XCircle } from "lucide-react";
 import StatusBadge from "../components/StatusBadge";
 import Badge from "../components/ui/Badge";
+import Alert from "../components/ui/Alert";
 import EmptyState from "../components/ui/EmptyState";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
 import { DemoDataManager } from "../lib/completeDemoData";
@@ -189,7 +190,7 @@ export default function ReviewQueuePage() {
 
       {/* Error Message */}
       {fetchError && (
-        <Alert variant="error" title="Could not load claims">
+        <Alert type="error" title="Could not load claims">
           {fetchError}
         </Alert>
       )}

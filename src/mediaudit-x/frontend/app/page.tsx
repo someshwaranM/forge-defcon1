@@ -132,7 +132,10 @@ export default function HomePage() {
                     </td>
                     <td className="py-2.5 text-slate-700">${claim.claim_amount?.toLocaleString()}</td>
                     <td className="py-2.5 text-right">
-                      <Link href={`/claims/${claim.claim_id}`} className="text-xs font-medium text-blue-600 hover:underline">
+                      <Link
+                        href={role === "hospital" ? `/hospital/claims/${claim.claim_id}` : `/claims/${claim.claim_id}`}
+                        className="text-xs font-medium text-blue-600 hover:underline"
+                      >
                         View
                       </Link>
                     </td>
