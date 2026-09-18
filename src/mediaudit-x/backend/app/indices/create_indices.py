@@ -26,7 +26,11 @@ def create_all_indices() -> None:
         body = json.loads(mapping_file.read_text())
 
         if es.indices.exists(index=index_name):
-            print(f"[skip]   {index_name} already exists")
+            # Push any newly added fields onto the existing index. Adding
+            # fields is always allowed; changing an existing field's type
+            # is not, and will raise here rather than silently diverge.
+            es.indices.put_mapping(index=index_name, body=body["mappings"])
+            print(f"[update] {index_name} already exists, mapping synced")
             continue
 
         es.indices.create(index=index_name, body=body)

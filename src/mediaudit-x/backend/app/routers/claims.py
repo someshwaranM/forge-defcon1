@@ -13,34 +13,25 @@ Design notes:
   status=PENDING, ready to be adjudicated through the existing
   POST /claims/{claim_id}/adjudicate flow -- no separate "upload" data
   path, this feeds the same pipeline everything else already uses.
-- POST /claims/{claim_id}/documents accepts a real file upload (multipart)
-  and stores it on local disk under UPLOAD_DIR, served back out through
-  the /files static mount added in main.py. This is deliberately NOT S3
-  or any object store -- there isn't one wired into this stack -- so
-  don't rely on this surviving a redeploy; swap UPLOAD_DIR's local-disk
-  write for an S3 client call in ingest-a-real-object-store work later,
-  the interface (doc_id/doc_type/source_uri appended to
-  attached_documents) doesn't need to change.
+- Document upload moved to routers/intake.py (backed by
+  app.pipeline.ingestion), which validates files before storing them and
+  also serves POST /claims/{claim_id}/documents.
 - Elasticsearch documents here are indexed without an explicit id, same
   as every ingestion script in this repo (see their `es.index(...)`
   calls) -- the app's own claim_id is the identity clients use; the
   ES-internal _id is an implementation detail this router looks up by
   searching on claim_id, same pattern list_claims/get_claim already use.
 """
-import re
 import uuid
 from datetime import datetime, timezone
-from pathlib import Path
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.es_client import get_es_client
+from app.pipeline.ingestion.models import CLAIM_ID_PATTERN
 
 router = APIRouter(prefix="/claims", tags=["claims"])
-
-UPLOAD_DIR = Path(__file__).parent.parent.parent / "uploads"
-_SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
 
 
 class ClaimCreate(BaseModel):
@@ -50,7 +41,9 @@ class ClaimCreate(BaseModel):
     icd10_code: str
     claim_amount: float = Field(gt=0)
     claim_type: str = "professional"
-    claim_id: str | None = None  # auto-generated if not supplied
+    # auto-generated if not supplied; restricted so it is safe as a
+    # storage path segment for uploaded documents
+    claim_id: str | None = Field(default=None, pattern=CLAIM_ID_PATTERN)
 
 
 def _find_claim(es, claim_id: str) -> dict:
@@ -106,40 +99,10 @@ def create_claim(claim: ClaimCreate):
         "claim_type": claim.claim_type,
         "submitted_date": datetime.now(timezone.utc).isoformat(),
         "status": "PENDING",
+        "source": "manual",
         "attached_documents": [],
     }
     result = es.index(index="insurance-claims", document=doc)
     es.indices.refresh(index="insurance-claims")
 
     return {"id": result["_id"], **doc}
-
-
-@router.post("/{claim_id}/documents", status_code=201)
-async def upload_claim_document(
-    claim_id: str,
-    file: UploadFile = File(...),
-    doc_type: str = Form("supporting_document"),
-):
-    es = get_es_client()
-    hit = _find_claim(es, claim_id)
-    es_id, source = hit["_id"], hit["_source"]
-
-    doc_id = f"DOC-{uuid.uuid4().hex[:8].upper()}"
-    safe_name = _SAFE_FILENAME_RE.sub("_", file.filename or "upload.bin")
-
-    claim_dir = UPLOAD_DIR / claim_id
-    claim_dir.mkdir(parents=True, exist_ok=True)
-    stored_name = f"{doc_id}_{safe_name}"
-    dest_path = claim_dir / stored_name
-
-    contents = await file.read()
-    dest_path.write_bytes(contents)
-
-    source_uri = f"/files/{claim_id}/{stored_name}"
-    attachment = {"doc_id": doc_id, "doc_type": doc_type, "source_uri": source_uri}
-    source.setdefault("attached_documents", []).append(attachment)
-
-    es.index(index="insurance-claims", id=es_id, document=source)
-    es.indices.refresh(index="insurance-claims")
-
-    return {"doc_id": doc_id, "source_uri": source_uri, "claim": {"id": es_id, **source}}

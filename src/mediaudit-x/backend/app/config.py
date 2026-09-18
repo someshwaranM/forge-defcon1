@@ -45,5 +45,13 @@ class Settings(BaseSettings):
 
     app_env: str = "development"
 
+    # Document ingestion (app/pipeline/ingestion). Limits are enforced by
+    # the checks in app/pipeline/ingestion/checks.py.
+    upload_dir: str | None = None  # default: backend/uploads
+    max_upload_mb: int = 20
+    max_files_per_upload: int = 20
+    max_pdf_pages: int = 200
+    min_image_side_px: int = 300
+
 
 settings = Settings()
