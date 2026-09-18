@@ -26,6 +26,7 @@ Design notes:
 """
 import uuid
 from datetime import datetime, timezone
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -33,6 +34,7 @@ from pydantic import BaseModel, Field
 from app.es_client import get_es_client
 from app.indices.names import ALL_CLAIMS, INSURANCE_CLAIMS
 from app.pipeline.ingestion.models import CLAIM_ID_PATTERN
+from app.tools.audit_ledger import append_event
 
 router = APIRouter(prefix="/claims", tags=["claims"])
 
@@ -47,6 +49,22 @@ class ClaimCreate(BaseModel):
     # auto-generated if not supplied; restricted so it is safe as a
     # storage path segment for uploaded documents
     claim_id: str | None = Field(default=None, pattern=CLAIM_ID_PATTERN)
+
+
+class ReviewerDecision(BaseModel):
+    """
+    A human reviewer's final call on a claim -- distinct from the AI
+    agent's recommendation in adjudication-results. The two are kept as
+    separate records (see submit_reviewer_decision below) so the audit
+    trail shows both what the agent suggested and what a person actually
+    decided, even when they disagree.
+    """
+    decision: Literal["APPROVE", "DENY", "REQUEST_INFO"]
+    reviewer_comment: str = Field(min_length=1)
+    reviewer_name: str = "Insurance Reviewer"
+
+
+_DECISION_TO_STATUS = {"APPROVE": "APPROVED", "DENY": "DENIED", "REQUEST_INFO": "REQUEST_INFO"}
 
 
 def _find_claim(es, claim_id: str) -> dict:
@@ -131,6 +149,91 @@ def get_latest_adjudication(claim_id: str):
         "decided_at": doc.get("decided_at"),
         "matched_policy": doc.get("matched_policy"),
         "trajectory_result": doc.get("trajectory_result"),
+    }
+
+
+@router.post("/{claim_id}/decision")
+def submit_reviewer_decision(claim_id: str, body: ReviewerDecision):
+    """
+    ADDED (18 Sept): the insurance-reviewer detail page ("Approve" /
+    "Deny" / "Request Info") previously only wrote the decision into
+    browser localStorage (DemoDataManager) -- it never reached the
+    backend at all, so a reviewer's call vanished on refresh and never
+    touched insurance-claims or the audit ledger. This persists it for
+    real:
+
+    1. insurance-claims.status is updated via update_by_query, same
+       pattern orchestrator.py already uses for the agent's own
+       decisions, so the claim list / dashboard reflect it immediately.
+    2. A new adjudication-results document records the human decision
+       (decision_type=HUMAN_REVIEW), separate from any prior AI-agent
+       result, and references that AI result's adjudication_id/status
+       so the audit trail shows both what the agent recommended and what
+       the reviewer actually decided.
+    3. append_event() chains a REVIEWER_DECISION entry onto the same
+       per-claim audit-ledger hash chain the agent's decisions use --
+       verify_chain() covers human overrides exactly like AI ones.
+    """
+    es = get_es_client()
+    hit = _find_claim(es, claim_id)
+    status = _DECISION_TO_STATUS[body.decision]
+
+    es.update_by_query(
+        index=hit["_index"],
+        query={"term": {"claim_id": claim_id}},
+        script={"source": "ctx._source.status = params.status", "params": {"status": status}},
+        refresh=True,
+    )
+
+    ai_result = es.search(
+        index="adjudication-results",
+        query={"term": {"claim_id": claim_id}},
+        sort=[{"decided_at": "desc"}],
+        size=1,
+    )
+    ai_hits = ai_result["hits"]["hits"]
+    ai_adjudication_id = ai_hits[0]["_source"].get("adjudication_id") if ai_hits else None
+    ai_status = ai_hits[0]["_source"].get("status") if ai_hits else None
+
+    adjudication_id = f"REVIEW-{uuid.uuid4().hex[:10]}"
+    decided_at = datetime.now(timezone.utc).isoformat()
+    decision_doc = {
+        "adjudication_id": adjudication_id,
+        "claim_id": claim_id,
+        "status": status,
+        "cited_evidence": [],
+        "generated_letter": f"Human reviewer decision: {status}. {body.reviewer_comment}",
+        "decided_at": decided_at,
+        "decided_by": body.reviewer_name,
+        "decision_type": "HUMAN_REVIEW",
+        "reviewer_comment": body.reviewer_comment,
+        "ai_recommendation_id": ai_adjudication_id,
+        "ai_recommended_status": ai_status,
+    }
+    es.index(index="adjudication-results", document=decision_doc, refresh="wait_for")
+
+    ledger_entry = append_event(
+        claim_id,
+        "REVIEWER_DECISION",
+        {
+            "adjudication_id": adjudication_id,
+            "status": status,
+            "reviewer_name": body.reviewer_name,
+            "reviewer_comment": body.reviewer_comment,
+            "ai_recommended_status": ai_status,
+        },
+        ref_id=adjudication_id,
+    )
+
+    return {
+        "status": status,
+        "adjudication_id": adjudication_id,
+        "decided_at": decided_at,
+        "decided_by": body.reviewer_name,
+        "reviewer_comment": body.reviewer_comment,
+        "ai_recommendation_id": ai_adjudication_id,
+        "ai_recommended_status": ai_status,
+        "ledger_entry": ledger_entry,
     }
 
 

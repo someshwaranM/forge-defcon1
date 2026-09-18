@@ -8,7 +8,7 @@ import { DemoDataManager, type DemoInsuranceClaim } from "../lib/completeDemoDat
 import { useRole } from "../contexts/RoleContext";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
-const USE_DEMO_DATA = true; // Set to false when backend is available
+const USE_DEMO_DATA = false; // wired to the real backend API
 
 type Claim = {
   id: string;
@@ -28,6 +28,7 @@ export default function ClaimsPage() {
   const [claims, setClaims] = useState<Claim[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("All");
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
     if (USE_DEMO_DATA) {
@@ -36,17 +37,26 @@ export default function ClaimsPage() {
       setClaims(demoClaims as any[]);
       setLoading(false);
     } else {
-      // Use real API
+      // Use real API. Previously a failed request here silently fell
+      // back to DemoDataManager's localStorage fixtures, which could
+      // render as a populated-looking table even though the real
+      // insurance-claims index was never reached -- masking exactly the
+      // kind of backend/CORS failure that makes "claims aren't showing
+      // up" hard to diagnose. Surface the real error instead.
       fetch(`${API_BASE_URL}/claims?limit=200`)
-        .then((res) => res.json())
+        .then((res) => {
+          if (!res.ok) throw new Error(`API returned ${res.status}`);
+          return res.json();
+        })
         .then((data) => {
           setClaims(data);
+          setFetchError(null);
           setLoading(false);
         })
-        .catch(() => {
-          // Fallback to demo data on API error
-          const demoClaims = DemoDataManager.getAllClaims();
-          setClaims(demoClaims as any[]);
+        .catch((err) => {
+          setFetchError(
+            `Could not load claims from ${API_BASE_URL} (${err.message}). Is the backend running, and does its CORS allow_origins include this page's exact origin (${typeof window !== "undefined" ? window.location.origin : "?"})?`
+          );
           setLoading(false);
         });
     }
@@ -99,6 +109,8 @@ export default function ClaimsPage() {
       <div className="card overflow-hidden">
         {loading ? (
           <p className="p-8 text-center text-sm text-slate-400">Loading claims...</p>
+        ) : fetchError ? (
+          <p className="p-8 text-center text-sm text-red-500">{fetchError}</p>
         ) : filtered.length === 0 ? (
           <p className="p-8 text-center text-sm text-slate-400">No claims match this filter.</p>
         ) : (
@@ -112,6 +124,7 @@ export default function ClaimsPage() {
                 <th className="px-4 py-2.5 font-medium">Status</th>
                 <th className="px-4 py-2.5 font-medium">Amount</th>
                 <th className="px-4 py-2.5 font-medium">Submitted</th>
+                <th className="px-4 py-2.5 font-medium"></th>
               </tr>
             </thead>
             <tbody>
@@ -126,6 +139,11 @@ export default function ClaimsPage() {
                   </td>
                   <td className="px-4 py-3 text-slate-700">${claim.claim_amount?.toLocaleString()}</td>
                   <td className="px-4 py-3 text-slate-500 text-sm">{claim.submitted_date || 'N/A'}</td>
+                  <td className="px-4 py-3 text-right">
+                    <Link href={`/claims/${claim.claim_id}`} className="text-xs font-medium text-blue-600 hover:underline">
+                      View
+                    </Link>
+                  </td>
                 </tr>
               ))}
             </tbody>
