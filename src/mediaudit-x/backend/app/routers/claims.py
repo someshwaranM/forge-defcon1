@@ -82,6 +82,53 @@ def get_claim(claim_id: str):
     return {"id": hit["_id"], **hit["_source"]}
 
 
+@router.get("/{claim_id}/adjudications")
+def get_latest_adjudication(claim_id: str):
+    """
+    ADDED (18 Sept): the frontend previously only ever saw an adjudication
+    result via the live SSE stream from POST /{claim_id}/adjudicate,
+    stored in React state -- nothing persisted it for a page reload or a
+    later visit, so a claim that was adjudicated an hour ago looked
+    exactly like one that was never touched. This returns the most recent
+    adjudication-results document for the claim (or 404 if none exists
+    yet) so the frontend can pre-populate the Overview/Adjudication/Audit
+    Trail tabs on load instead of showing them permanently blank after a
+    refresh. Shape matches the "done" SSE event's data exactly, so the
+    same frontend rendering code works for both a live run and a
+    page-load restore.
+    """
+    es = get_es_client()
+    result = es.search(
+        index="adjudication-results",
+        query={"term": {"claim_id": claim_id}},
+        sort=[{"decided_at": "desc"}],
+        size=1,
+    )
+    hits = result["hits"]["hits"]
+    if not hits:
+        raise HTTPException(status_code=404, detail="No adjudication has been run for this claim yet")
+    doc = hits[0]["_source"]
+
+    ledger_result = es.search(
+        index="audit-ledger",
+        query={"term": {"adjudication_id": doc.get("adjudication_id")}},
+        size=1,
+    )
+    ledger_hits = ledger_result["hits"]["hits"]
+    ledger_entry = ledger_hits[0]["_source"] if ledger_hits else None
+
+    return {
+        "status": doc.get("status"),
+        "adjudication_id": doc.get("adjudication_id"),
+        "cited_evidence": doc.get("cited_evidence", []),
+        "generated_letter": doc.get("generated_letter"),
+        "ledger_entry": ledger_entry,
+        "decided_at": doc.get("decided_at"),
+        "matched_policy": doc.get("matched_policy"),
+        "trajectory_result": doc.get("trajectory_result"),
+    }
+
+
 @router.post("", status_code=201)
 def create_claim(claim: ClaimCreate):
     es = get_es_client()

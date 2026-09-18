@@ -131,7 +131,9 @@ def load_all(write_to_file: Path | None = None):
 
     es = get_es_client()
     for doc in docs:
-        es.index(index="fda-drug-interactions", document=doc)
+        # FIXED (18 Sept): stable id=interaction_id, same idempotency fix
+        # as the other loaders.
+        es.index(index="fda-drug-interactions", document=doc, id=doc["interaction_id"])
     es.indices.refresh(index="fda-drug-interactions")
     print(f"[loaded] {len(docs)} docs -> fda-drug-interactions")
 
