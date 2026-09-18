@@ -112,20 +112,29 @@ export default function ClaimsPage() {
                 <th className="px-4 py-2.5 font-medium">Status</th>
                 <th className="px-4 py-2.5 font-medium">Amount</th>
                 <th className="px-4 py-2.5 font-medium">Submitted</th>
+                <th className="px-4 py-2.5 font-medium"></th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((claim) => (
-                <tr key={claim.id} className="border-t border-slate-100">
+                <tr key={claim.id} className="border-t border-slate-100 hover:bg-slate-50/60">
                   <td className="px-4 py-3 font-medium text-slate-800">{claim.claim_id}</td>
                   <td className="px-4 py-3 text-slate-500">{claim.patient_id}</td>
                   <td className="px-4 py-3 text-slate-500">{claim.payer_name}</td>
-                  <td className="px-4 py-3 text-slate-500">{claim.cpt_code}</td>
+                  <td className="px-4 py-3 text-slate-500">{claim.cpt_code || "—"}</td>
                   <td className="px-4 py-3">
                     <StatusBadge status={claim.status} />
                   </td>
                   <td className="px-4 py-3 text-slate-700">${claim.claim_amount?.toLocaleString()}</td>
                   <td className="px-4 py-3 text-slate-500 text-sm">{claim.submitted_date || 'N/A'}</td>
+                  <td className="px-4 py-3 text-right">
+                    <Link
+                      href={`/hospital/claims/${claim.claim_id}`}
+                      className="text-xs font-medium text-blue-600 hover:underline"
+                    >
+                      View
+                    </Link>
+                  </td>
                 </tr>
               ))}
             </tbody>
