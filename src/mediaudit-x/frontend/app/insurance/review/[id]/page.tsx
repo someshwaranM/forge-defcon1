@@ -42,6 +42,8 @@ export default function InsuranceReviewPage() {
   const [aiAnalysis, setAiAnalysis] = useState<AIAnalysisReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [showDecisionModal, setShowDecisionModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
   const [decision, setDecision] = useState<"APPROVE" | "DENY" | "REQUEST_INFO" | null>(null);
   const [reviewerComment, setReviewerComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -83,9 +85,15 @@ export default function InsuranceReviewPage() {
     setSubmitting(false);
     setShowDecisionModal(false);
 
-    // Show success and redirect
-    alert(`Claim ${decision === "APPROVE" ? "approved" : decision === "DENY" ? "denied" : "information requested"} successfully!`);
-    router.push("/review-queue");
+    // Show success modal
+    const message = decision === "APPROVE"
+      ? "Claim has been approved successfully!"
+      : decision === "DENY"
+      ? "Claim has been denied."
+      : "Additional information has been requested from the hospital.";
+
+    setSuccessMessage(message);
+    setShowSuccessModal(true);
   };
 
   if (loading) {
@@ -386,6 +394,62 @@ export default function InsuranceReviewPage() {
               required
             />
             <p className="text-xs text-slate-500 mt-1">Required for audit trail</p>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Success Modal */}
+      <Modal
+        open={showSuccessModal}
+        onClose={() => {}}
+        title={decision === "APPROVE" ? "Claim Approved" : decision === "DENY" ? "Claim Denied" : "Information Requested"}
+      >
+        <div className="space-y-4">
+          <div className="flex items-center justify-center py-6">
+            {decision === "APPROVE" ? (
+              <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center">
+                <CheckCircle size={40} className="text-green-600" />
+              </div>
+            ) : decision === "DENY" ? (
+              <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center">
+                <XCircle size={40} className="text-red-600" />
+              </div>
+            ) : (
+              <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center">
+                <AlertCircle size={40} className="text-amber-600" />
+              </div>
+            )}
+          </div>
+
+          <div className="text-center">
+            <p className="text-lg font-semibold text-slate-900 mb-2">
+              {successMessage}
+            </p>
+            <p className="text-sm text-slate-600">
+              This decision has been recorded in the audit trail and the hospital has been notified.
+            </p>
+          </div>
+
+          <div className="flex gap-3 pt-4">
+            <Button
+              variant="secondary"
+              size="lg"
+              onClick={() => {
+                setShowSuccessModal(false);
+                router.push("/review-queue");
+              }}
+              className="flex-1"
+            >
+              Back to Review Queue
+            </Button>
+            <Button
+              variant="primary"
+              size="lg"
+              onClick={() => router.push("/review-queue")}
+              className="flex-1"
+            >
+              Review Next Claim
+            </Button>
           </div>
         </div>
       </Modal>
