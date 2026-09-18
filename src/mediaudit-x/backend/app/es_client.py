@@ -24,27 +24,40 @@ from functools import lru_cache
 from app.config import settings
 
 
+def _clean(value: str | None) -> str | None:
+    """Strips whitespace and wrapping quotes that Docker env_file keeps."""
+    if value is None:
+        return None
+    value = value.strip().strip('"').strip("'").strip()
+    return value or None
+
+
 @lru_cache
 def get_es_client() -> Elasticsearch:
-    if settings.elastic_cloud_id and settings.elastic_api_key:
-        return Elasticsearch(
-            cloud_id=settings.elastic_cloud_id,
-            api_key=settings.elastic_api_key,
-        )
+    cloud_id = _clean(settings.elastic_cloud_id)
+    api_key = _clean(settings.elastic_api_key)
+    url = _clean(settings.elastic_url)
 
-    if settings.elastic_url and settings.elastic_api_key:
+    # A common mix-up: pasting the endpoint URL into ELASTIC_CLOUD_ID.
+    # A real Cloud ID is "name:base64..."; a URL means URL-based auth.
+    if cloud_id and cloud_id.startswith(("http://", "https://")):
+        url = url or cloud_id
+        cloud_id = None
+
+    if cloud_id and api_key:
+        return Elasticsearch(cloud_id=cloud_id, api_key=api_key)
+
+    if url and api_key:
         # Elastic Cloud Serverless (or any URL-based cluster using API
         # key auth instead of basic auth).
-        return Elasticsearch(
-            settings.elastic_url,
-            api_key=settings.elastic_api_key,
-        )
+        return Elasticsearch(url, api_key=api_key)
 
-    if settings.elastic_url:
+    if url:
         auth = None
-        if settings.elastic_username and settings.elastic_password:
-            auth = (settings.elastic_username, settings.elastic_password)
-        return Elasticsearch(settings.elastic_url, basic_auth=auth)
+        username, password = _clean(settings.elastic_username), _clean(settings.elastic_password)
+        if username and password:
+            auth = (username, password)
+        return Elasticsearch(url, basic_auth=auth)
 
     raise RuntimeError(
         "No Elasticsearch connection configured. Set either "
