@@ -189,13 +189,13 @@ export default function InsuranceReviewPage() {
             )}
           </div>
           <div className="flex-1">
-            <h2 className="text-xl font-bold mb-2 ${
+            <h2 className={`text-xl font-bold mb-2 ${
               aiAnalysis.recommendation === "APPROVE"
                 ? "text-emerald-900"
                 : aiAnalysis.recommendation === "DENY"
                 ? "text-red-900"
                 : "text-amber-900"
-            }">
+            }`}>
               AI Recommendation: {aiAnalysis.recommendation === "APPROVE" ? "APPROVE CLAIM" : aiAnalysis.recommendation === "DENY" ? "DENY CLAIM" : "REQUEST MORE INFORMATION"}
             </h2>
             <p className={`text-sm leading-relaxed ${
