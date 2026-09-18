@@ -11,8 +11,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { useRole } from "../../contexts/RoleContext";
 import {
   ArrowLeft,
   Play,
@@ -26,9 +27,14 @@ import Timeline from "../../components/Timeline";
 import CitationPanel from "../../components/CitationPanel";
 import InteractionAlert from "../../components/InteractionAlert";
 import StatusBadge from "../../components/StatusBadge";
-import DocumentsPanel from "../../components/DocumentsPanel";
+import AIRecommendationCard from "../../components/claims/AIRecommendationCard";
+import ClaimStatusTimeline from "../../components/claims/ClaimStatusTimeline";
+import ReviewerDecisionPanel from "../../components/claims/ReviewerDecisionPanel";
+import AIAgentChat from "../../components/claims/AIAgentChat";
+import { DemoDataManager, type DemoInsuranceClaim } from "../../lib/completeDemoData";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+const USE_DEMO_DATA = true; // Set to false when backend is available
 
 type ReasoningStep = { step: string; detail: string };
 type InteractionAlertData = {
@@ -49,7 +55,7 @@ type DoneEvent = {
   trajectory_result?: any;
 };
 
-const TABS = ["Overview", "Clinical History", "Policy & Guidelines", "Adjudication", "Audit Trail"] as const;
+const TABS = ["Overview", "Clinical History", "Policy & Guidelines", "AI Assistant", "Adjudication", "Audit Trail"] as const;
 
 function parseSSEEvent(chunk: string): { event: string; data: string } | null {
   const lines = chunk.split("\n");
@@ -64,7 +70,16 @@ function parseSSEEvent(chunk: string): { event: string; data: string } | null {
 
 export default function ClaimDetailPage() {
   const params = useParams();
+  const router = useRouter();
+  const { role } = useRole();
   const claimId = params.id as string;
+
+  // Block hospital from accessing insurance adjudication page
+  useEffect(() => {
+    if (role === "hospital") {
+      router.push("/claims");
+    }
+  }, [role, router]);
 
   const [claim, setClaim] = useState<any>(null);
   const [tab, setTab] = useState<(typeof TABS)[number]>("Overview");
@@ -74,10 +89,25 @@ export default function ClaimDetailPage() {
   const [running, setRunning] = useState(false);
 
   useEffect(() => {
-    fetch(`${API_BASE_URL}/claims/${claimId}`)
-      .then((res) => res.json())
-      .then(setClaim)
-      .catch(() => {});
+    if (USE_DEMO_DATA) {
+      // Use demo data
+      const demoClaim = DemoDataManager.getClaim(claimId);
+      if (demoClaim) {
+        setClaim(demoClaim as any);
+      }
+    } else {
+      // Use real API
+      fetch(`${API_BASE_URL}/claims/${claimId}`)
+        .then((res) => res.json())
+        .then(setClaim)
+        .catch(() => {
+          // Fallback to demo data
+          const demoClaim = DemoDataManager.getClaim(claimId);
+          if (demoClaim) {
+            setClaim(demoClaim as any);
+          }
+        });
+    }
   }, [claimId]);
 
   async function runAdjudication() {
@@ -87,6 +117,35 @@ export default function ClaimDetailPage() {
     setDone(null);
     setTab("Adjudication");
 
+    if (USE_DEMO_DATA) {
+      // Simulate AI processing with demo data
+      const demoSteps = [
+        { step: "Policy Search", detail: "Searching for applicable coverage policies..." },
+        { step: "Policy Match Found", detail: `Matched policy: ${claim.payer_name} - Total Knee Arthroplasty Coverage` },
+        { step: "Patient Timeline Analysis", detail: "Analyzing patient's clinical history and treatment timeline..." },
+        { step: "Conservative Treatment Check", detail: "Verifying 180-day conservative treatment requirement..." },
+        { step: "Drug Safety Check", detail: "Checking for medication interactions..." },
+        { step: "Evidence Validation", detail: "Validating supporting clinical documentation..." },
+        { step: "Decision Generation", detail: "Generating recommendation based on policy requirements..." },
+      ];
+
+      for (const step of demoSteps) {
+        await new Promise(resolve => setTimeout(resolve, 800));
+        setSteps((prev) => [...prev, step]);
+      }
+
+      // Get demo AI response
+      const demoResponse = DemoDataManager.getAIResponse(claimId);
+      if (demoResponse) {
+        setDone(demoResponse as any);
+      }
+
+      setRunning(false);
+      setTab("Overview");
+      return;
+    }
+
+    // Real API call
     const response = await fetch(`${API_BASE_URL}/claims/${claimId}/adjudicate`, { method: "POST" });
     if (!response.body) {
       setRunning(false);
@@ -137,11 +196,6 @@ export default function ClaimDetailPage() {
     ? "All coverage criteria satisfied"
     : null;
 
-  // Draft claims have documents but no codes yet; codes come from the
-  // later drafting/coder-review stages, so there's nothing to adjudicate.
-  const isDraft = (claim.status || "").toUpperCase() === "DRAFT";
-  const canAdjudicate = !running && !isDraft;
-
   const policyEvidence = (done?.cited_evidence || []).filter((e: any) => e.source_index === "medical-policies");
   const otherEvidence = (done?.cited_evidence || []).filter((e: any) => e.source_index !== "medical-policies");
 
@@ -158,27 +212,26 @@ export default function ClaimDetailPage() {
         </div>
         <button
           onClick={runAdjudication}
-          disabled={!canAdjudicate}
-          title={isDraft ? "Draft claims need CPT/ICD-10 codes before adjudication" : undefined}
+          disabled={running}
           className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white ${
-            !canAdjudicate ? "cursor-default bg-slate-400" : "bg-blue-600 hover:bg-blue-700"
+            running ? "cursor-default bg-slate-400" : "bg-blue-600 hover:bg-blue-700"
           }`}
         >
           <Play size={15} />
-          {running ? "Adjudicating..." : isDraft ? "Awaiting coding" : "Run Adjudication"}
+          {running ? "Adjudicating..." : "Run Adjudication"}
         </button>
       </div>
 
       <div className="card grid grid-cols-5 gap-4 p-4 text-sm">
         <Field label="Patient" value={claim.patient_id} />
         <Field label="Payer" value={claim.payer_name} />
-        <Field
-          label="CPT / ICD-10"
-          value={claim.cpt_code || claim.icd10_code ? `${claim.cpt_code || "—"} / ${claim.icd10_code || "—"}` : "Pending coding"}
-        />
-        <Field label="Claim Amount" value={claim.claim_amount != null ? `$${claim.claim_amount.toLocaleString()}` : "—"} />
+        <Field label="CPT / ICD-10" value={`${claim.cpt_code} / ${claim.icd10_code}`} />
+        <Field label="Claim Amount" value={`$${claim.claim_amount?.toLocaleString()}`} />
         <Field label="Submitted" value={claim.submitted_date} />
       </div>
+
+      {/* Status Timeline */}
+      <ClaimStatusTimeline currentStatus={done?.status || claim.status} />
 
       {alerts.length > 0 && <InteractionAlert alerts={alerts} />}
 
@@ -205,67 +258,46 @@ export default function ClaimDetailPage() {
       </div>
 
       {tab === "Overview" && (
-        <div className="grid grid-cols-3 gap-5">
-          <div className="col-span-2 space-y-5">
-          <DocumentsPanel
-            claimId={claimId}
-            claimStatus={claim.status}
-            apiBaseUrl={API_BASE_URL}
-            onClaimChanged={(updated) => updated && setClaim(updated)}
-          />
-          <div className="card p-5">
-            <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-800">
-              <FileText size={15} /> Claim Summary
-            </h2>
-            {done ? (
-              <pre className="whitespace-pre-wrap rounded-lg bg-slate-50 p-4 text-xs leading-relaxed text-slate-700">
-                {done.generated_letter}
-              </pre>
-            ) : (
-              <p className="text-sm text-slate-400">Run adjudication to generate a decision summary and letter.</p>
-            )}
-          </div>
-          </div>
-
-          <div className="space-y-5">
-            <div className="card p-5">
-              <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-800">
-                <Sparkles size={15} /> AI Analysis
-              </h2>
-              {done ? (
-                <div className="space-y-1.5 text-sm text-slate-600">
-                  <div className="flex items-center gap-1.5 text-emerald-600">
-                    <CheckCircle2 size={14} /> Evidence retrieved
-                  </div>
-                  <div>Found {done.cited_evidence.length} cited source(s)</div>
-                  <div>Matched policy: {done.matched_policy?.policy_id || "none"}</div>
-                  <div>Interaction check: {alerts.length > 0 ? `${alerts.length} alert(s)` : "none found"}</div>
-                </div>
-              ) : (
-                <p className="text-sm text-slate-400">Not run yet.</p>
-              )}
+        <div className="space-y-5">
+          {/* AI Recommendation and Summary Row */}
+          <div className="grid grid-cols-3 gap-5">
+            <div className="col-span-2">
+              <div className="card p-5">
+                <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-800">
+                  <FileText size={15} /> Claim Summary
+                </h2>
+                {done ? (
+                  <pre className="whitespace-pre-wrap rounded-lg bg-slate-50 p-4 text-xs leading-relaxed text-slate-700">
+                    {done.generated_letter}
+                  </pre>
+                ) : (
+                  <p className="text-sm text-slate-400">Run adjudication to generate a decision summary and letter.</p>
+                )}
+              </div>
             </div>
 
-            <div className="card p-5">
-              <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-800">
-                <ShieldAlert size={15} /> Risk Assessment
-              </h2>
-              {riskLevel ? (
-                <div>
-                  <span
-                    className={`badge ${
-                      riskLevel === "High" ? "badge-denied" : riskLevel === "Medium" ? "badge-pending" : "badge-approved"
-                    }`}
-                  >
-                    {riskLevel}
-                  </span>
-                  {riskReason && <p className="mt-2 text-sm text-slate-600">{riskReason}</p>}
-                </div>
-              ) : (
-                <p className="text-sm text-slate-400">Not assessed yet.</p>
-              )}
+            <div>
+              <AIRecommendationCard
+                status={done?.status}
+                matchedPolicy={done?.matched_policy}
+                trajectoryResult={done?.trajectory_result}
+                evidenceCount={done?.cited_evidence?.length || 0}
+                interactionCount={alerts.length}
+              />
             </div>
           </div>
+
+          {/* Reviewer Decision Panel */}
+          {done && (
+            <ReviewerDecisionPanel
+              claimId={claim.claim_id}
+              aiRecommendation={done.status}
+              onDecisionSubmit={(decision, comment) => {
+                console.log("Decision submitted:", decision, comment);
+                // TODO: Implement API call to submit decision
+              }}
+            />
+          )}
         </div>
       )}
 
@@ -292,6 +324,10 @@ export default function ClaimDetailPage() {
           )}
           {policyEvidence.length > 0 && <CitationPanel evidence={policyEvidence} />}
         </div>
+      )}
+
+      {tab === "AI Assistant" && (
+        <AIAgentChat claimId={claim.claim_id} isExpanded />
       )}
 
       {tab === "Adjudication" && (

@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect } from "react";
 import {
   LayoutDashboard,
   FileStack,
@@ -13,20 +14,58 @@ import {
   Search,
   Bell,
   ChevronDown,
+  MessageSquare,
+  ClipboardList,
+  Building2,
+  UserCircle,
+  Upload,
+  LogOut,
 } from "lucide-react";
+import { useRole } from "../contexts/RoleContext";
 
-const NAV_ITEMS = [
-  { href: "/", label: "Home", icon: LayoutDashboard },
-  { href: "/claims", label: "Claims", icon: FileStack },
-  { href: "/patient-timeline", label: "Patient Timeline", icon: History },
-  { href: "/policy-lookup", label: "Policy Lookup", icon: BookOpenCheck },
-  { href: "/audit-trail", label: "Audit Trail", icon: ShieldCheck },
-  { href: "/reports", label: "Reports", icon: BarChart3 },
-  { href: "/settings", label: "Settings", icon: SettingsIcon },
+// Hospital navigation - LIMITED ACCESS
+const HOSPITAL_NAV = [
+  { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/claims", label: "My Claims", icon: FileStack },
+  { href: "/hospital/create-claim", label: "Create Claim", icon: Upload },
+];
+
+// Insurance reviewer navigation - READ ONLY for claims
+const INSURANCE_NAV = [
+  { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/review-queue", label: "Review Queue", icon: ClipboardList },
+  { href: "/audit-trail", label: "Audit History", icon: ShieldCheck },
 ];
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { role, logout, userName, userTitle, isAuthenticated } = useRole();
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!isAuthenticated && !pathname.startsWith("/login")) {
+      router.push("/login");
+    }
+  }, [isAuthenticated, pathname, router]);
+
+  // Handle logout
+  const handleLogout = () => {
+    logout();
+    router.push("/login");
+  };
+
+  // Render login page without shell
+  if (pathname.startsWith("/login")) {
+    return <>{children}</>;
+  }
+
+  // Redirect to login if not authenticated
+  if (!isAuthenticated) {
+    return null; // Show nothing while redirecting
+  }
+
+  const NAV_ITEMS = role === "hospital" ? HOSPITAL_NAV : INSURANCE_NAV;
 
   return (
     <div className="flex min-h-screen bg-slate-50">
@@ -59,9 +98,29 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        <div className="mx-3 mb-5 rounded-lg bg-white/5 p-3 text-xs text-slate-400">
-          <div className="font-medium text-slate-200">AI-Powered Clinical Auditing</div>
-          <div className="mt-0.5">Elastic hybrid search + ES|QL trajectory reasoning</div>
+        {/* Role and User Info */}
+        <div className="border-t border-white/10 mx-3 mb-3 pt-3">
+          <div className="flex items-center gap-2 mb-2">
+            {role === "hospital" ? (
+              <Building2 size={14} className="text-slate-400" />
+            ) : (
+              <UserCircle size={14} className="text-slate-400" />
+            )}
+            <div className="text-xs text-slate-400">
+              {role === "hospital" ? "Hospital Portal" : "Insurance Reviewer"}
+            </div>
+          </div>
+          <div className="text-sm font-medium text-slate-200">{userName}</div>
+          <div className="text-xs text-slate-400 mt-0.5">{userTitle}</div>
+
+          {/* Logout Button */}
+          <button
+            onClick={handleLogout}
+            className="mt-3 w-full rounded-md bg-red-500/10 px-2 py-1.5 text-xs text-red-300 hover:bg-red-500/20 transition-colors flex items-center justify-center gap-2"
+          >
+            <LogOut size={12} />
+            Logout
+          </button>
         </div>
       </aside>
 
@@ -84,11 +143,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             </button>
             <div className="flex items-center gap-2 pl-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white">
-                SM
+                {role === "hospital" ? "CC" : "SM"}
               </div>
               <div className="leading-tight">
-                <div className="text-sm font-medium text-slate-800">Dr. Sarah Mitchell</div>
-                <div className="text-xs text-slate-400">Medical Director (demo user)</div>
+                <div className="text-sm font-medium text-slate-800">{userName}</div>
+                <div className="text-xs text-slate-400">{userTitle}</div>
               </div>
               <ChevronDown size={14} className="text-slate-400" />
             </div>

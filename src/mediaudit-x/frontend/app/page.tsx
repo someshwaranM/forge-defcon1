@@ -8,10 +8,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { FileStack, Clock, XCircle, CheckCircle2, Upload, Search, ShieldCheck } from "lucide-react";
+import { FileStack, Clock, XCircle, CheckCircle2, Upload, Search, ShieldCheck, ClipboardList } from "lucide-react";
 import StatCard from "./components/StatCard";
 import StatusBadge from "./components/StatusBadge";
 import DonutChart from "./components/DonutChart";
+import { useRole } from "./contexts/RoleContext";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
@@ -27,6 +28,7 @@ type Claim = {
 export default function HomePage() {
   const [claims, setClaims] = useState<Claim[]>([]);
   const [loading, setLoading] = useState(true);
+  const { role, userName } = useRole();
 
   useEffect(() => {
     fetch(`${API_BASE_URL}/claims?limit=200`)
@@ -42,19 +44,38 @@ export default function HomePage() {
   const pending = claims.filter((c) => c.status === "PENDING").length;
   const denied = claims.filter((c) => c.status === "DENIED").length;
   const approved = claims.filter((c) => c.status === "APPROVED").length;
+  const draft = claims.filter((c) => c.status === "DRAFT").length;
+  const submitted = claims.filter((c) => c.status === "SUBMITTED").length;
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Welcome back, Dr. Mitchell</h1>
-        <p className="mt-1 text-sm text-slate-500">Here's what's happening with your claims today.</p>
+        <h1 className="text-2xl font-semibold text-slate-900">
+          {role === "hospital" ? `Welcome back, ${userName}` : `Welcome back, ${userName}`}
+        </h1>
+        <p className="mt-1 text-sm text-slate-500">
+          {role === "hospital"
+            ? "Manage and track your insurance claims"
+            : "Here's what's happening with your claims today"}
+        </p>
       </div>
 
       <div className="grid grid-cols-4 gap-4">
-        <StatCard icon={FileStack} iconBg="bg-blue-50" iconColor="text-blue-600" label="Total Claims" value={loading ? "…" : total} />
-        <StatCard icon={Clock} iconBg="bg-amber-50" iconColor="text-amber-600" label="Pending Review" value={loading ? "…" : pending} />
-        <StatCard icon={XCircle} iconBg="bg-red-50" iconColor="text-red-600" label="Denied Claims" value={loading ? "…" : denied} />
-        <StatCard icon={CheckCircle2} iconBg="bg-emerald-50" iconColor="text-emerald-600" label="Approved Claims" value={loading ? "…" : approved} />
+        {role === "hospital" ? (
+          <>
+            <StatCard icon={FileStack} iconBg="bg-blue-50" iconColor="text-blue-600" label="Draft Claims" value={loading ? "…" : draft} />
+            <StatCard icon={Upload} iconBg="bg-purple-50" iconColor="text-purple-600" label="Submitted" value={loading ? "…" : submitted} />
+            <StatCard icon={Clock} iconBg="bg-amber-50" iconColor="text-amber-600" label="In Review" value={loading ? "…" : pending} />
+            <StatCard icon={CheckCircle2} iconBg="bg-emerald-50" iconColor="text-emerald-600" label="Approved" value={loading ? "…" : approved} />
+          </>
+        ) : (
+          <>
+            <StatCard icon={FileStack} iconBg="bg-blue-50" iconColor="text-blue-600" label="Total Claims" value={loading ? "…" : total} />
+            <StatCard icon={Clock} iconBg="bg-amber-50" iconColor="text-amber-600" label="Pending Review" value={loading ? "…" : pending} />
+            <StatCard icon={XCircle} iconBg="bg-red-50" iconColor="text-red-600" label="Denied Claims" value={loading ? "…" : denied} />
+            <StatCard icon={CheckCircle2} iconBg="bg-emerald-50" iconColor="text-emerald-600" label="Approved Claims" value={loading ? "…" : approved} />
+          </>
+        )}
       </div>
 
       <div className="grid grid-cols-3 gap-6">
@@ -88,11 +109,11 @@ export default function HomePage() {
                   <tr key={claim.id} className="border-b border-slate-50 last:border-0">
                     <td className="py-2.5 font-medium text-slate-800">{claim.claim_id}</td>
                     <td className="py-2.5 text-slate-500">{claim.patient_id}</td>
-                    <td className="py-2.5 text-slate-500">{claim.cpt_code || "—"}</td>
+                    <td className="py-2.5 text-slate-500">{claim.cpt_code}</td>
                     <td className="py-2.5">
                       <StatusBadge status={claim.status} />
                     </td>
-                    <td className="py-2.5 text-slate-700">{claim.claim_amount != null ? `$${claim.claim_amount.toLocaleString()}` : "—"}</td>
+                    <td className="py-2.5 text-slate-700">${claim.claim_amount?.toLocaleString()}</td>
                     <td className="py-2.5 text-right">
                       <Link href={`/claims/${claim.claim_id}`} className="text-xs font-medium text-blue-600 hover:underline">
                         View
@@ -126,9 +147,19 @@ export default function HomePage() {
           <div className="card p-5">
             <h2 className="mb-3 text-sm font-semibold text-slate-800">Quick Actions</h2>
             <div className="space-y-2">
-              <QuickAction icon={Upload} label="Upload Documents" href="/claims/new" />
-              <QuickAction icon={Search} label="Search Policy" href="/policy-lookup" />
-              <QuickAction icon={ShieldCheck} label="View Audit Trail" href="/audit-trail" />
+              {role === "hospital" ? (
+                <>
+                  <QuickAction icon={Upload} label="Create New Claim" href="/hospital/create-claim" />
+                  <QuickAction icon={FileStack} label="View All Claims" href="/claims" />
+                  <QuickAction icon={ShieldCheck} label="View Audit Trail" href="/audit-trail" />
+                </>
+              ) : (
+                <>
+                  <QuickAction icon={ClipboardList} label="Review Queue" href="/review-queue" />
+                  <QuickAction icon={Search} label="Search Policy" href="/policy-lookup" />
+                  <QuickAction icon={ShieldCheck} label="View Audit Trail" href="/audit-trail" />
+                </>
+              )}
             </div>
           </div>
         </div>
