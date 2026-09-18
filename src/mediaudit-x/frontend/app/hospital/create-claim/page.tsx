@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, FileText, Sparkles, CheckCircle, Upload, User, Hospital, DollarSign } from "lucide-react";
+import { ArrowLeft, ArrowRight, FileText, Sparkles, CheckCircle, Upload, User, Hospital, DollarSign, X, Paperclip } from "lucide-react";
 import Button from "../../components/ui/Button";
 import Alert from "../../components/ui/Alert";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
@@ -120,6 +120,7 @@ export default function CreateClaimPage() {
   const [step, setStep] = useState<Step>("details");
   const [formData, setFormData] = useState<SimpleClaimFormData>(EMPTY_FORM);
   const [generatedReport, setGeneratedReport] = useState<GeneratedClaimReport | null>(null);
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
 
   const updateForm = <K extends keyof SimpleClaimFormData>(key: K, value: SimpleClaimFormData[K]) => {
     setFormData((prev) => ({ ...prev, [key]: value }));
@@ -544,6 +545,56 @@ export default function CreateClaimPage() {
                 <p className="mt-1 text-xs text-slate-500">AI will break this down into room, procedure, medication, and other charges</p>
               </FormField>
             </div>
+          </div>
+
+          {/* Document Upload */}
+          <div className="card p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <Paperclip size={20} className="text-blue-600" />
+              <h2 className="text-lg font-semibold text-slate-900">Supporting Documents</h2>
+              <span className="text-xs text-slate-500">(Bills, Prescriptions, Reports)</span>
+            </div>
+
+            <label className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-slate-300 px-6 py-8 text-center hover:border-blue-400 hover:bg-blue-50/50 transition-colors">
+              <Upload size={32} className="text-slate-400" />
+              <div>
+                <span className="text-sm font-medium text-slate-700">Click to upload files</span>
+                <p className="text-xs text-slate-500 mt-1">PDF, Images, or Documents (Max 10MB each)</p>
+              </div>
+              <input
+                type="file"
+                multiple
+                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files) {
+                    setUploadedFiles(prev => [...prev, ...Array.from(e.target.files!)]);
+                  }
+                }}
+              />
+            </label>
+
+            {uploadedFiles.length > 0 && (
+              <div className="mt-4 space-y-2">
+                <div className="text-sm font-medium text-slate-700">Uploaded Files ({uploadedFiles.length}):</div>
+                {uploadedFiles.map((file, idx) => (
+                  <div key={idx} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2 border border-slate-200">
+                    <div className="flex items-center gap-2">
+                      <Paperclip size={16} className="text-slate-400" />
+                      <span className="text-sm text-slate-700">{file.name}</span>
+                      <span className="text-xs text-slate-500">({(file.size / 1024).toFixed(1)} KB)</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setUploadedFiles(prev => prev.filter((_, i) => i !== idx))}
+                      className="text-slate-400 hover:text-red-600 transition-colors"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end">

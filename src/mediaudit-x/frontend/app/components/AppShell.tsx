@@ -21,25 +21,18 @@ import {
 } from "lucide-react";
 import { useRole } from "../contexts/RoleContext";
 
-// Hospital navigation
+// Hospital navigation - LIMITED ACCESS
 const HOSPITAL_NAV = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/claims", label: "Claims", icon: FileStack },
+  { href: "/claims", label: "My Claims", icon: FileStack },
   { href: "/hospital/create-claim", label: "Create Claim", icon: Upload },
-  { href: "/audit-trail", label: "Audit Trail", icon: ShieldCheck },
-  { href: "/settings", label: "Settings", icon: SettingsIcon },
 ];
 
-// Insurance reviewer navigation
+// Insurance reviewer navigation - READ ONLY for claims
 const INSURANCE_NAV = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/claims", label: "Claims", icon: FileStack },
   { href: "/review-queue", label: "Review Queue", icon: ClipboardList },
-  { href: "/patient-timeline", label: "Patient Timeline", icon: History },
-  { href: "/policy-lookup", label: "Policy Lookup", icon: BookOpenCheck },
-  { href: "/audit-trail", label: "Audit Trail", icon: ShieldCheck },
-  { href: "/reports", label: "Reports", icon: BarChart3 },
-  { href: "/settings", label: "Settings", icon: SettingsIcon },
+  { href: "/audit-trail", label: "Audit History", icon: ShieldCheck },
 ];
 
 export default function AppShell({ children }: { children: React.ReactNode }) {

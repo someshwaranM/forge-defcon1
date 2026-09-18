@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import StatusBadge from "../components/StatusBadge";
 import { DemoDataManager, type DemoInsuranceClaim } from "../lib/completeDemoData";
+import { useRole } from "../contexts/RoleContext";
+import Alert from "../components/ui/Alert";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 const USE_DEMO_DATA = true; // Set to false when backend is available
@@ -21,6 +23,7 @@ type Claim = {
 const FILTERS = ["All", "PENDING", "APPROVED", "DENIED"] as const;
 
 export default function ClaimsPage() {
+  const { role } = useRole();
   const [claims, setClaims] = useState<Claim[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("All");
@@ -52,17 +55,26 @@ export default function ClaimsPage() {
 
   return (
     <div className="space-y-5">
+      {/* Access Control Alert for Insurance Role */}
+      {role === "insurance" && (
+        <Alert type="warning" title="Read-Only Access">
+          You are viewing claims as an Insurance Reviewer. Claims can only be created by hospitals. Use the Review Queue to process submitted claims.
+        </Alert>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Claims</h1>
+          <h1 className="text-2xl font-semibold text-slate-900">{role === "hospital" ? "My Claims" : "All Claims"}</h1>
           <p className="mt-1 text-sm text-slate-500">{claims.length} claims on file</p>
         </div>
-        <Link
-          href="/hospital/create-claim"
-          className="rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-blue-700"
-        >
-          + New Claim
-        </Link>
+        {role === "hospital" && (
+          <Link
+            href="/hospital/create-claim"
+            className="rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            + New Claim
+          </Link>
+        )}
       </div>
 
       <div className="flex gap-2">

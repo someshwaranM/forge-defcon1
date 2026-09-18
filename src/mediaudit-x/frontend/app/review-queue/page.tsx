@@ -210,13 +210,12 @@ export default function ReviewQueuePage() {
                   </td>
                   <td className="px-4 py-3 text-right">
                     <Link
-                      href={`/claims/${claim.claim_id}`}
+                      href={`/insurance/review/${claim.claim_id}`}
                       className="text-xs font-medium text-blue-600 hover:underline"
                     >
                       Review
                     </Link>
-                  </td>
-                </tr>
+                  </td>                </tr>
               ))}
             </tbody>
           </table>
