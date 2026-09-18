@@ -12,7 +12,7 @@ source, rather than left to LLM inference alone.
 ## Core capabilities
 
 - **Document intake + OCR** (`pipeline/ingestion/` + `pipeline/ocr/`,
-  see `INGESTION.md`) — a hospital uploads PDFs/images against a claim;
+  see `INGESTION.md` and `OCR.md`) — a hospital uploads PDFs/images against a claim;
   each file is validated (magic-byte content sniffing, size/page/pixel
   limits, duplicate detection), stored, and registered in `claim-documents`
   with `ocr_status: PENDING`. `POST /claims/{claim_id}/ocr` then extracts
